@@ -637,10 +637,10 @@ flowchart TD
     User2 --> UC4
     User2 --> UC9
     
-    UC1 -.-> UC2 : includes
-    UC3 -.-> UC2 : requires
-    UC4 -.-> UC2 : requires
-    UC4 -.-> UC5 : includes
+    UC1 -.->|includes| UC2
+    UC3 -.->|requires| UC2
+    UC4 -.->|requires| UC2
+    UC4 -.->|includes| UC5
     
     User1 --> UC6
     User2 --> UC6
@@ -648,10 +648,10 @@ flowchart TD
     Admin --> UC7
     Admin --> UC8
     
-    UC9 -.-> UC1 : includes
-    UC9 -.-> UC2 : includes
-    UC9 -.-> UC3 : includes
-    UC9 -.-> UC4 : includes
+    UC9 -.->|includes| UC1
+    UC9 -.->|includes| UC2
+    UC9 -.->|includes| UC3
+    UC9 -.->|includes| UC4
     
     style UC1 fill:#e1f5e1
     style UC2 fill:#ffe1e1
