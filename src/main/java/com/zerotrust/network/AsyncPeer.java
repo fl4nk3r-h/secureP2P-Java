@@ -31,7 +31,7 @@ import com.zerotrust.crypto.KeyExchange;
  * Status: Stable
  * Location: com.zerotrust.network
  * 
- * @author Aritra Chakraborty
+ * @author fl4nk3r
  * @version 1.0
  */
 public class AsyncPeer {
