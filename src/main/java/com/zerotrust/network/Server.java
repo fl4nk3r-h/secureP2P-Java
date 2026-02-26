@@ -10,7 +10,7 @@ import java.net.Socket;
 /**
  * Simple TCP Server that echoes received messages
  * 
- * @author Aritra Chakraborty
+ * @author fl4nk3r
  * @version 1.0
  */
 public class Server {
