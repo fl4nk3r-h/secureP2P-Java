@@ -22,7 +22,7 @@ import com.zerotrust.network.Server;
  * </ul>
  * </p>
  * 
- * @author Aritra Chakraborty
+ * @author fl4nk3r
  * @version 1.0
  */
 public class Main {
