@@ -14,7 +14,7 @@ import javax.crypto.KeyAgreement;
  * Status: Stable
  * Location: com.zerotrust.crypto
  *
- * @author Aritra Chakraborty
+ * @author fl4nk3r
  * @version 1.0
  * @see com.zerotrust.crypto.CryptoUtils
  */
