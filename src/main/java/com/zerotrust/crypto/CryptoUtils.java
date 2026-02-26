@@ -14,7 +14,7 @@ import javax.crypto.spec.SecretKeySpec;
  * Status: Stable
  * Location: com.zerotrust.crypto
  * 
- * @author Aritra Chakraborty
+ * @author fl4nk3r
  * @version 1.0
  */
 public class CryptoUtils {
