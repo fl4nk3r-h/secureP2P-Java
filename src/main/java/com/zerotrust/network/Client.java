@@ -9,7 +9,7 @@ import java.net.Socket;
 /**
  * Simple TCP Client to connect to the Server
  * 
- * @author Aritra Chakraborty
+ * @author fl4nk3r
  * @version 1.0
  */
 public class Client {
