@@ -80,3 +80,6 @@ TEST_SUMMARY.md
 *.so
 *.dll
 *.dylib
+
+# Local assistant context file
+CLAUDE.md
