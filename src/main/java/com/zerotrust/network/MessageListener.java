@@ -74,7 +74,8 @@ public final class MessageListener {
             String line;
             while (running && (line = connection.readLine()) != null) {
                 messageQueue.put(line);
-                executorService.execute(() -> processMessage(line));
+                String wireMessage = line;
+                executorService.execute(() -> processMessage(wireMessage));
             }
         } catch (Exception exception) {
             if (running) {
