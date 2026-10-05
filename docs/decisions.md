@@ -2,6 +2,12 @@
 
 This document records decisions made during the security-hardening migration. It is intentionally separate from the design documents: the design describes the target system, while this record explains why choices were made and whether they are implemented, provisional, or still pending.
 
+## Major version decision
+
+**Status:** Accepted
+
+The project version is now `2.0.0-SNAPSHOT`. This is a major-version development line because the migration removes the `server` and `client` CLI modes, splits `AsyncPeer` into focused modules, changes session ownership and send-before-establishment behavior, and prepares a versioned secure protocol. The `SNAPSHOT` suffix remains until the authenticated ML-KEM/session migration is complete and release acceptance criteria pass.
+
 ## Decision status
 
 - **Accepted:** selected for the project and reflected in the current implementation or migration direction.
