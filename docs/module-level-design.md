@@ -35,22 +35,22 @@ This module is an application/composition layer. It should not own cryptographic
 
 ### `com.zerotrust.network`
 
-**Owners:** `Client`, `Server`, and `AsyncPeer`
+**Owners:** `Client`, `Server`, `AsyncPeer`, `PeerConnection`, `SessionManager`, and `MessageListener`
 
 Responsibilities:
 
-- Open and close TCP sockets.
-- Create line-oriented input/output streams.
-- Manage synchronous echo behavior or asynchronous peer behavior.
-- Coordinate connection callbacks, message queues, listener threads, and executor tasks.
-- Delegate encryption and decryption to `CryptoUtils` rather than implementing cryptography directly.
+- Open and close TCP sockets through `PeerConnection`.
+- Create line-oriented input/output streams and expose readiness through `PeerConnection`.
+- Manage the legacy synchronous echo examples or asynchronous peer behavior.
+- Coordinate connection callbacks, message queues, listener threads, and executor tasks through focused owners.
+- Delegate identity exchange and session encryption to `SessionManager`.
 
 The package currently contains two related but separate network paths:
 
 | Network path | Classes | Characteristics |
 | --- | --- | --- |
 | Echo path | `Client`, `Server` | Synchronous, one client, plaintext, request/response. |
-| Peer path | `AsyncPeer` | Asynchronous connection setup, DH handshake, encrypted message sends, queue/callback delivery. |
+| Peer path | `AsyncPeer`, `PeerConnection`, `SessionManager`, `MessageListener` | Asynchronous connection setup, DH handshake, encrypted message sends, queue/callback delivery. |
 
 ### `com.zerotrust.crypto`
 
@@ -65,7 +65,7 @@ Responsibilities:
 - Provide explicit AES-256-GCM payload protection with nonces and associated data.
 - Provide ML-KEM-768 key encapsulation and decapsulation through the pinned provider.
 
-This module has no socket or CLI dependencies. The new PQC classes are migration foundations and are not yet wired into `AsyncPeer`. Current algorithms and limitations are documented in [Security Notes](security.md).
+This module has no socket or CLI dependencies. `AeadCrypto` and `MlKemKeyExchange` are migration foundations and are not yet wired into the live `SessionManager`. Current algorithms and limitations are documented in [Security Notes](security.md).
 
 ## Implemented class diagram
 
@@ -102,16 +102,11 @@ classDiagram
 
     class AsyncPeer {
         -String peerId
-        -String remotePeerId
         -int port
-        -ServerSocket serverSocket
-        -Socket peerSocket
-        -PrintWriter out
-        -BufferedReader in
-        -SecretKey encryptionKey
-        -KeyExchange keyExchange
+        -PeerConnection peerConnection
+        -SessionManager sessionManager
+        -MessageListener messageListener
         -ExecutorService executorService
-        -BlockingQueue~String~ messageQueue
         +AsyncPeer(String peerId, int port)
         +acceptConnectionAsync(Consumer callback)
         +connectToPeerAsync(String, int, Consumer callback)
@@ -121,6 +116,40 @@ classDiagram
         +pollMessage() String
         +onMessageReceived(Consumer callback)
         +onError(Consumer callback)
+        +close()
+    }
+
+    class PeerConnection {
+        -ServerSocket serverSocket
+        -Socket peerSocket
+        -PrintWriter out
+        -BufferedReader in
+        +acceptAsync(Consumer callback)
+        +connectAsync(String, int, Consumer callback)
+        +waitUntilReady(long) boolean
+        +sendLine(String)
+        +readLine() String
+        +close()
+    }
+
+    class SessionManager {
+        -String localPeerId
+        -String remotePeerId
+        -KeyExchange keyExchange
+        -SecretKey encryptionKey
+        +exchangePeerId() String
+        +performKeyExchangeAsync(Runnable)
+        +sendMessageAsync(String, Consumer callback)
+        +decrypt(String) String
+        +close()
+    }
+
+    class MessageListener {
+        -BlockingQueue~String~ messageQueue
+        -Thread listenerThread
+        +start()
+        +pollMessage() String
+        +onMessageReceived(Consumer callback)
         +close()
     }
 
@@ -154,17 +183,20 @@ classDiagram
     Main ..> Client : constructs
     Main ..> Server : constructs
     Main ..> AsyncPeer : constructs
-    AsyncPeer *-- KeyExchange : owns
-    AsyncPeer ..> CryptoUtils : encrypts/decrypts
-    KeyExchange ..> CryptoUtils : shared-secret key derivation by caller
-    AsyncPeer ..> AeadCrypto : migration target
-    AsyncPeer ..> MlKemKeyExchange : migration target
+    AsyncPeer *-- PeerConnection : delegates transport
+    AsyncPeer *-- SessionManager : delegates session
+    AsyncPeer *-- MessageListener : delegates delivery
+    SessionManager *-- KeyExchange : owns legacy handshake
+    SessionManager ..> CryptoUtils : current encryption
+    MessageListener ..> SessionManager : decrypts through
+    SessionManager ..> AeadCrypto : migration target
+    SessionManager ..> MlKemKeyExchange : migration target
     Client ..> Socket : uses
     Server ..> ServerSocket : uses
     AsyncPeer ..> Socket : uses
 ```
 
-`Main` is a coordinator rather than a service object. `AsyncPeer` is the main stateful module: it owns the active connection, key-exchange object, worker pool, listener thread, callbacks, and inbound queue.
+`Main` is a coordinator rather than a service object. `AsyncPeer` owns module composition and the shared executor, while `PeerConnection`, `SessionManager`, and `MessageListener` own transport, session, and delivery state respectively.
 
 ## Dependency boundaries
 
