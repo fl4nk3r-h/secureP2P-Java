@@ -23,7 +23,7 @@ java -jar target/securep2p-2.0.0-SNAPSHOT.jar interactive Alice 12346 listen
 java -jar target/securep2p-2.0.0-SNAPSHOT.jar interactive Bob 12347 connect localhost 12346
 ```
 
-Use `/help`, `/status`, `/clear`, or `/quit` in the chat. The application exposes peer mode only; the legacy `Client` and `Server` classes remain internal library examples and are no longer selectable from `Main`.
+Use `/help`, `/status`, `/clear`, `/quit`, or `/bye` in the chat. The application reports connection success only after asynchronous stream initialization and starts chat only after the encrypted session handshake completes. The application exposes peer mode only; the legacy `Client` and `Server` classes remain internal library examples and are no longer selectable from `Main`.
 
 ## What Is Implemented
 

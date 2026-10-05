@@ -25,7 +25,7 @@ The listener's port is the remote port used by the connector. Each peer also bin
 - `/help` prints the command list.
 - `/status` prints local and remote peer information plus encryption state.
 - `/clear` emits terminal clear-screen control characters.
-- `/quit`, `/exit`, and `/close` stop the chat and close the peer.
+- `/quit`, `/bye`, `/exit`, and `/close` stop the chat and close the peer.
 
 ## Port conflicts
 
@@ -40,9 +40,9 @@ Avoid killing processes blindly; verify the process identity first.
 ## Connection failures
 
 - `Connection refused`: start the listener first, verify host and remote port, and check firewall rules.
-- Readiness timeout: the asynchronous connect/accept task has not initialized both streams within the configured timeout.
+- Readiness timeout: the asynchronous connect/accept callback did not report initialized streams within the configured timeout.
 - Peer-ID exchange failure: both sides must reach the exchange step, and the two calls should run concurrently.
-- Key exchange failure: both sides must run `performKeyExchangeAsync`; wait for both completion callbacks before sending.
+- Key exchange failure: both sides must run `performKeyExchangeAsync`; `Main` waits for the completion callback before allowing chat input or sending messages.
 - Decryption failure: confirm both peers used the same handshake sequence and have not received malformed or modified ciphertext.
 
 ## Shutdown and diagnostics
