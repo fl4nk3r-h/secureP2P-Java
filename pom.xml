@@ -13,6 +13,7 @@
         <maven.compiler.target>21</maven.compiler.target>
         <maven.compiler.release>21</maven.compiler.release>
         <junit.jupiter.version>5.10.2</junit.jupiter.version>
+        <bouncycastle.version>1.80</bouncycastle.version>
         <slf4j.version>2.0.12</slf4j.version>
         <logback.version>1.4.14</logback.version>
     </properties>
@@ -24,6 +25,13 @@
             <artifactId>junit-jupiter</artifactId>
             <version>${junit.jupiter.version}</version>
             <scope>test</scope>
+        </dependency>
+
+        <!-- ML-KEM/ML-DSA provider and supporting cryptographic primitives -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk18on</artifactId>
+            <version>${bouncycastle.version}</version>
         </dependency>
 
         <!-- SLF4J API for logging -->
