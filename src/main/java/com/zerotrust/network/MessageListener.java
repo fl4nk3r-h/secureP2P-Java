@@ -6,7 +6,9 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
-/** Owns inbound reading, message buffering, decryption dispatch, and callbacks. */
+/**
+ * Owns inbound reading, message buffering, decryption dispatch, and callbacks.
+ */
 public final class MessageListener {
     private final PeerConnection connection;
     private final SessionManager sessionManager;
