@@ -6,6 +6,8 @@
 - Maven 3.6 or newer.
 - A local TCP stack. The integration-style peer tests bind ephemeral localhost ports.
 
+The PQC migration currently uses Bouncy Castle `bcprov-jdk18on` version `1.80` for ML-KEM support. The provider is pinned in `pom.xml`; update it only after reviewing Java 21 compatibility, algorithm support, licensing, and dependency advisories.
+
 The Maven build declares JUnit Jupiter for tests and SLF4J/Logback dependencies, although application code currently uses `System.out` and `System.err` directly.
 
 ## Common commands
@@ -34,6 +36,8 @@ The packaged artifact is `target/securep2p-1.0-SNAPSHOT.jar`.
 ## Test scope
 
 `CryptoUtilsTest` checks AES key generation, encryption/decryption, and key derivation. `KeyExchangeTest` checks public-key exchange and shared-secret agreement. `AsyncPeerTest` exercises asynchronous connection setup, readiness, peer-ID exchange, key exchange, callbacks, queue behavior, and cleanup.
+
+`PqcCryptoTest` covers the migration foundation: AES-256-GCM round trips, associated-data authentication, modified-ciphertext rejection, nonce variation, and ML-KEM-768 encapsulation/decapsulation.
 
 Tests create and close real local sockets. A failure can therefore be caused by a busy ephemeral port, an interrupted process, or an environment that blocks localhost networking.
 
