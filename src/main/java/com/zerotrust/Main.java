@@ -98,7 +98,7 @@ public class Main {
 
         // Display welcome banner
         System.out.println("\n╔════════════════════════════════════════╗");
-        System.out.println("║ Secure P2P Interactive Chat System  ║");
+        System.out.println("║ Secure P2P Interactive Chat System     ║");
         System.out.println("╚════════════════════════════════════════╝\n");
 
         AsyncPeer peer = new AsyncPeer(peerName, port);

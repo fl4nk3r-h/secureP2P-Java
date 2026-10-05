@@ -4,6 +4,8 @@ SecureP2P is a Java 21 project for asynchronous peer connections and a migrating
 
 This repository is **not production-ready secure messaging software**. The live `AsyncPeer` protocol now uses an ML-KEM-768 bootstrap and AES-256-GCM, but it still lacks authenticated peer identities, a Double Ratchet, replay protection, and hardened protocol framing. See [Security Notes](docs/security.md) before using it beyond local experiments.
 
+![Image](image.png)
+
 ## Quick Start
 
 Requirements: JDK 21 and Maven 3.6 or newer.
