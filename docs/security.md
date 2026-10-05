@@ -4,6 +4,8 @@
 
 This is an educational protocol demonstration, not a secure messaging product. Encryption is present, but confidentiality alone does not provide an authenticated or tamper-resistant channel.
 
+The migration has started with tested `AeadCrypto` and `MlKemKeyExchange` primitives. These are not yet connected to `AsyncPeer`; the active peer protocol therefore remains the legacy unauthenticated DH/AES path described below. Do not interpret the new classes as proof that peer communication is already post-quantum or authenticated.
+
 ## Implemented protections
 
 - Java cryptographic providers supply DH, AES, SHA-256, and `SecureRandom` primitives.
