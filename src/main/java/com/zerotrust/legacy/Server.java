@@ -7,7 +7,10 @@ import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 
-/** Archived plaintext single-client echo server. Not exposed by Main or active peer code. */
+/**
+ * Archived plaintext single-client echo server. Not exposed by Main or active
+ * peer code.
+ */
 @Deprecated(forRemoval = false)
 public class Server {
     private final ServerSocket serverSocket;
