@@ -2,19 +2,18 @@ package com.zerotrust.crypto;
 
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
-import java.security.NoSuchAlgorithmException;
-import java.security.NoSuchProviderException;
+import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.security.Security;
 import java.util.Arrays;
 
 import org.bouncycastle.crypto.SecretWithEncapsulation;
 import org.bouncycastle.crypto.params.AsymmetricKeyParameter;
-import org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider;
-import org.bouncycastle.jcajce.provider.BouncyCastleProvider;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.jcajce.spec.MLKEMParameterSpec;
 import org.bouncycastle.pqc.crypto.mlkem.MLKEMExtractor;
 import org.bouncycastle.pqc.crypto.mlkem.MLKEMGenerator;
+import org.bouncycastle.pqc.crypto.mlkem.MLKEMPrivateKeyParameters;
 import org.bouncycastle.pqc.crypto.util.PrivateKeyFactory;
 import org.bouncycastle.pqc.crypto.util.PublicKeyFactory;
 
@@ -50,7 +49,7 @@ public final class MlKemKeyExchange {
 
     public static byte[] decapsulate(byte[] encodedPrivateKey, byte[] encapsulation) throws Exception {
         AsymmetricKeyParameter privateKey = PrivateKeyFactory.createKey(encodedPrivateKey);
-        return new MLKEMExtractor(privateKey).extractSecret(encapsulation);
+        return new MLKEMExtractor((MLKEMPrivateKeyParameters) privateKey).extractSecret(encapsulation);
     }
 
     public static byte[] copy(byte[] value) {
