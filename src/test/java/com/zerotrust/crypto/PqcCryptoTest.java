@@ -10,7 +10,24 @@ import java.util.Arrays;
 
 import org.junit.jupiter.api.Test;
 
+/**
+ * Tests for the v2 post-quantum crypto primitives.
+ * <p>
+ * Covers AES-256-GCM round trips, AAD binding, nonce freshness, and
+ * ML-KEM-768 encapsulation/decapsulation consistency.
+ * </p>
+ *
+ * @author fl4nk3r-h
+ * @version 2.0.0
+ * @see AeadCrypto
+ * @see MlKemKeyExchange
+ */
 class PqcCryptoTest {
+    /**
+     * Verifies an AES-GCM round trip succeeds with matching associated data.
+     *
+     * @throws Exception if encryption or decryption fails
+     */
     @Test
     void aesGcmRoundTripBindsAssociatedData() throws Exception {
         byte[] key = new byte[AeadCrypto.AES_KEY_BYTES];
@@ -24,6 +41,12 @@ class PqcCryptoTest {
         assertFalse(Arrays.equals(plaintext, encrypted));
     }
 
+    /**
+     * Verifies each encryption uses a fresh nonce and that modifying the
+     * ciphertext or AAD causes decryption to fail.
+     *
+     * @throws Exception if encryption fails
+     */
     @Test
     void aesGcmUsesFreshNonceAndRejectsModifiedCiphertext() throws Exception {
         byte[] key = new byte[AeadCrypto.AES_KEY_BYTES];
@@ -40,6 +63,12 @@ class PqcCryptoTest {
                 () -> AeadCrypto.decrypt(first, key, "wrong-header".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
     }
 
+    /**
+     * Verifies that ML-KEM-768 encapsulation and decapsulation produce the
+     * same shared secret.
+     *
+     * @throws Exception if key generation or KEM operations fail
+     */
     @Test
     void mlKem768ProducesMatchingSharedSecret() throws Exception {
         KeyPair recipient = MlKemKeyExchange.generateKeyPair();
