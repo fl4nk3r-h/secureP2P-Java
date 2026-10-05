@@ -50,6 +50,8 @@ Tests create and close real local sockets. A failure can therefore be caused by 
 5. Update the relevant file in `docs/` and the root README when public behavior changes.
 6. Keep generated `target/` output out of commits.
 
+Record architectural, protocol, and security choices in [Architecture and Security Decisions](decisions.md). Mark each decision as accepted, in progress, pending review, or rejected, and include the reason and consequences so future changes do not silently reopen settled questions.
+
 ## Style and design conventions
 
 - Use Java 21 language and API features only when they improve clarity.
