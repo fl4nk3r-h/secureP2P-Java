@@ -1,6 +1,6 @@
 # Operations and Troubleshooting
 
-## Running the demos
+## Running the peer application
 
 Build once:
 
@@ -8,14 +8,7 @@ Build once:
 mvn clean package
 ```
 
-Run the unencrypted echo demo in separate terminals:
-
-```bash
-java -cp target/securep2p-1.0-SNAPSHOT.jar com.zerotrust.Main server
-java -cp target/securep2p-1.0-SNAPSHOT.jar com.zerotrust.Main client
-```
-
-Run encrypted interactive chat:
+Run peer chat in two terminals:
 
 ```bash
 # Listener: binds local port 12346
@@ -56,8 +49,8 @@ Avoid killing processes blindly; verify the process identity first.
 
 Use `/quit` for an interactive session. `AsyncPeer.close()` closes the active socket, listening socket, streams, listener thread, and executor. The application prints stack traces for asynchronous errors, so capture standard error when diagnosing failures.
 
-The project has no external configuration file, service manager, health endpoint, metrics, or persistent logs. Port, peer ID, and connection settings are supplied as command-line arguments or are fixed in `Main` defaults.
+The project has no external configuration file, service manager, health endpoint, metrics, or persistent logs. Port, peer ID, and connection settings are supplied as command-line arguments or are fixed in `Main` defaults. The legacy `Client` and `Server` classes are not application modes.
 
 ## Deployment boundary
 
-The demos are intended for local or controlled-network use. Do not expose the echo server or current peer protocol to an untrusted network. Network encryption is not a substitute for authentication, authorization, patch management, firewalling, or process isolation.
+The application is intended for local or controlled-network use. Do not expose the current peer protocol to an untrusted network. Network encryption is not a substitute for authentication, authorization, patch management, firewalling, or process isolation.
