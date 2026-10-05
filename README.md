@@ -1,6 +1,6 @@
 # SecureP2P Java
 
-SecureP2P is a small Java 21 learning project that demonstrates line-oriented TCP communication, asynchronous peer connections, and a basic Diffie-Hellman/AES message flow. It is useful for studying socket lifecycle, concurrency, and Java cryptography APIs.
+SecureP2P is a small Java 21 learning project for asynchronous peer connections and a migrating cryptographic session design. It is useful for studying socket lifecycle, concurrency, and Java cryptography APIs.
 
 This repository is **not production-ready secure messaging software**. The current protocol does not authenticate peers, authenticate ciphertext, negotiate algorithms, or provide a nonce-based encryption mode. See [Security Notes](docs/security.md) before using it beyond local experiments.
 
@@ -23,12 +23,12 @@ java -cp target/securep2p-1.0-SNAPSHOT.jar com.zerotrust.Main interactive Alice 
 java -cp target/securep2p-1.0-SNAPSHOT.jar com.zerotrust.Main interactive Bob 12347 connect localhost 12346
 ```
 
-Use `/help`, `/status`, `/clear`, or `/quit` in the chat. The simpler `server` and `client` modes demonstrate an unencrypted TCP echo service.
+Use `/help`, `/status`, `/clear`, or `/quit` in the chat. The application exposes peer mode only; the legacy `Client` and `Server` classes remain internal library examples and are no longer selectable from `Main`.
 
 ## What Is Implemented
 
-- `Main`: command-line entry point with `server`, `client`, `peer`, and `interactive` modes.
-- `Client` and `Server`: one-client, line-oriented TCP echo example.
+- `Main`: peer-only command-line entry point with `peer` and `interactive` modes.
+- `Client` and `Server`: retained source classes for the legacy echo example, not exposed as CLI modes.
 - `AsyncPeer`: asynchronous accept/connect operations, peer-ID exchange, DH key exchange, encrypted sends, a receive queue, and callbacks.
 - `CryptoUtils`: AES helper methods and SHA-256-to-AES key derivation.
 - `KeyExchange`: 1024-bit finite-field DH key generation and Base64 public-key serialization.
