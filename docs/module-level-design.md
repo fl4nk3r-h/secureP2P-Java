@@ -27,7 +27,7 @@ flowchart LR
 Responsibilities:
 
 - Parse command-line mode and positional arguments.
-- Construct and coordinate `Client`, `Server`, or `AsyncPeer`.
+- Construct and coordinate `AsyncPeer`.
 - Run the terminal chat loop and interpret chat commands.
 - Display status and errors to standard output/error.
 
@@ -35,37 +35,33 @@ This module is an application/composition layer. It should not own cryptographic
 
 ### `com.zerotrust.network`
 
-**Owners:** `Client`, `Server`, `AsyncPeer`, `PeerConnection`, `SessionManager`, and `MessageListener`
+**Owners:** `AsyncPeer`, `PeerConnection`, `SessionManager`, and `MessageListener`
 
 Responsibilities:
 
 - Open and close TCP sockets through `PeerConnection`.
 - Create line-oriented input/output streams and expose readiness through `PeerConnection`.
-- Manage the legacy synchronous echo examples or asynchronous peer behavior.
+- Manage asynchronous peer behavior.
 - Coordinate connection callbacks, message queues, listener threads, and executor tasks through focused owners.
 - Delegate identity exchange and session encryption to `SessionManager`.
 
-The package currently contains two related but separate network paths:
+The package currently contains the active peer path. The former echo path is archived under `com.zerotrust.legacy`.
 
 | Network path | Classes | Characteristics |
 | --- | --- | --- |
-| Echo path | `Client`, `Server` | Synchronous, one client, plaintext, request/response. |
 | Peer path | `AsyncPeer`, `PeerConnection`, `SessionManager`, `MessageListener` | Asynchronous connection setup, DH handshake, encrypted message sends, queue/callback delivery. |
 
 ### `com.zerotrust.crypto`
 
-**Owners:** `CryptoUtils`, `KeyExchange`, `AeadCrypto`, and `MlKemKeyExchange`
+**Owners:** `AeadCrypto` and `MlKemKeyExchange`
 
 Responsibilities:
 
-- Generate and serialize DH key material.
-- Compute the DH shared secret.
-- Derive AES keys from shared-secret text.
-- Encrypt and decrypt message strings.
+- Generate and serialize ML-KEM-768 key material.
+- Encapsulate and decapsulate session secrets.
 - Provide explicit AES-256-GCM payload protection with nonces and associated data.
-- Provide ML-KEM-768 key encapsulation and decapsulation through the pinned provider.
 
-This module has no socket or CLI dependencies. `AeadCrypto` and `MlKemKeyExchange` are migration foundations and are not yet wired into the live `SessionManager`. Current algorithms and limitations are documented in [Security Notes](security.md).
+This module has no socket or CLI dependencies. `AeadCrypto` and `MlKemKeyExchange` are wired into the live `SessionManager`; identity authentication and ratchet state remain pending. Current algorithms and limitations are documented in [Security Notes](security.md).
 
 ## Implemented class diagram
 
@@ -78,26 +74,6 @@ classDiagram
         -startInteractivePeerMode(String[] args)
         -startInteractiveChat(AsyncPeer, String, String, boolean)
         -handleCommand(String, String, String)
-    }
-
-    class Client {
-        -Socket socket
-        -PrintWriter out
-        -BufferedReader in
-        +Client(String address, int port)
-        +sendMessage(String message)
-        +receiveMessage() String
-        +close()
-    }
-
-    class Server {
-        -ServerSocket serverSocket
-        -Socket clientSocket
-        -PrintWriter out
-        -BufferedReader in
-        +Server(int port)
-        +start()
-        +close()
     }
 
     class AsyncPeer {
@@ -135,8 +111,8 @@ classDiagram
     class SessionManager {
         -String localPeerId
         -String remotePeerId
-        -KeyExchange keyExchange
-        -SecretKey encryptionKey
+        -KeyPair kemKeyPair
+        -byte[] sessionKey
         +exchangePeerId() String
         +performKeyExchangeAsync(Runnable)
         +sendMessageAsync(String, Consumer callback)
@@ -153,22 +129,6 @@ classDiagram
         +close()
     }
 
-    class CryptoUtils {
-        +encrypt(String, SecretKey) String
-        +decrypt(String, SecretKey) String
-        +generateKey() SecretKey
-        +getKeyFromString(String) SecretKey
-    }
-
-    class KeyExchange {
-        -KeyPair keyPair
-        -KeyAgreement keyAgreement
-        +KeyExchange()
-        +getPublicKeyString() String
-        +generateSharedSecret(String) byte[]
-        +getSharedSecretString(String) String
-    }
-
     class AeadCrypto {
         +encrypt(byte[], byte[], byte[]) byte[]
         +decrypt(byte[], byte[], byte[]) byte[]
@@ -180,20 +140,13 @@ classDiagram
         +decapsulate(byte[], byte[]) byte[]
     }
 
-    Main ..> Client : constructs
-    Main ..> Server : constructs
     Main ..> AsyncPeer : constructs
     AsyncPeer *-- PeerConnection : delegates transport
     AsyncPeer *-- SessionManager : delegates session
     AsyncPeer *-- MessageListener : delegates delivery
-    SessionManager *-- KeyExchange : owns legacy handshake
-    SessionManager ..> CryptoUtils : current encryption
+    SessionManager ..> MlKemKeyExchange : PQC bootstrap
+    SessionManager ..> AeadCrypto : message encryption
     MessageListener ..> SessionManager : decrypts through
-    SessionManager ..> AeadCrypto : migration target
-    SessionManager ..> MlKemKeyExchange : migration target
-    Client ..> Socket : uses
-    Server ..> ServerSocket : uses
-    AsyncPeer ..> Socket : uses
 ```
 
 `Main` is a coordinator rather than a service object. `AsyncPeer` owns module composition and the shared executor, while `PeerConnection`, `SessionManager`, and `MessageListener` own transport, session, and delivery state respectively.
@@ -203,20 +156,14 @@ classDiagram
 ```mermaid
 flowchart TD
     Main[Main]
-    Client[Client]
-    Server[Server]
     Peer[AsyncPeer]
-    Key[KeyExchange]
-    Crypto[CryptoUtils]
+    Key[MlKemKeyExchange]
+    Crypto[AeadCrypto]
     JNet[java.net + java.io]
     JCrypto[java.security + javax.crypto]
     JConcurrent[java.util.concurrent]
 
-    Main --> Client
-    Main --> Server
     Main --> Peer
-    Client --> JNet
-    Server --> JNet
     Peer --> JNet
     Peer --> JConcurrent
     Peer --> Key
@@ -238,11 +185,12 @@ flowchart TD
 | Class | Owns | Does not own |
 | --- | --- | --- |
 | `Main` | CLI arguments, chat UI, mode selection | Socket internals or cryptographic implementation. |
-| `Client` | One outbound TCP connection and echo request/response | Encryption, retries, multiple connections. |
-| `Server` | One listening socket, one accepted client, echo loop | Peer authentication or encrypted transport. |
-| `AsyncPeer` | Peer socket, async tasks, handshake sequencing, queue, callbacks | A durable message store or authenticated identity. |
-| `KeyExchange` | DH key pair and shared-secret computation | Socket I/O and message encryption. |
-| `CryptoUtils` | AES operations, random AES key generation, SHA-256 derivation | Key exchange, identity, transport framing. |
+| `AsyncPeer` | Module composition, public façade, shared executor | Cryptographic state, raw socket ownership, durable message storage. |
+| `PeerConnection` | TCP listener, active socket, streams, readiness, transport close | Peer identity and cryptographic keys. |
+| `SessionManager` | Peer IDs, ML-KEM bootstrap, session key, AES-GCM encrypt/decrypt | Socket lifecycle and message delivery threads. |
+| `MessageListener` | Inbound reader, raw queue, decrypt dispatch, callbacks | Socket creation and session key derivation. |
+| `AeadCrypto` | AES-256-GCM encryption/decryption | Key exchange, identity, replay policy. |
+| `MlKemKeyExchange` | ML-KEM-768 key generation and KEM operations | Socket I/O, identity authentication, ratchet state. |
 
 ## AsyncPeer state model
 
@@ -285,9 +233,9 @@ Important sequencing rules:
 ```mermaid
 flowchart LR
     Send[sendMessageAsync]
-    Encrypt{encryptionKey set?}
-    Plain[Write plaintext line]
-    Cipher[CryptoUtils.encrypt\nwrite Base64 ciphertext]
+    Encrypt{sessionKey set?}
+    Reject[Reject send]
+    Cipher[AeadCrypto.encrypt\nwrite Base64 AES-GCM payload]
     Wire[(TCP line)
 ]
     Read[listenerThread readLine]
@@ -298,9 +246,8 @@ flowchart LR
     Poll[pollMessage\nraw wire line]
 
     Send --> Encrypt
-    Encrypt -->|no| Plain
+    Encrypt -->|no| Reject
     Encrypt -->|yes| Cipher
-    Plain --> Wire
     Cipher --> Wire
     Wire --> Read
     Read --> Queue
