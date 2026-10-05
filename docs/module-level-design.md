@@ -263,8 +263,8 @@ The queue and callback are intentionally documented separately because they curr
 
 | Test class | Module coverage |
 | --- | --- |
-| `CryptoUtilsTest` | AES encryption/decryption, generated keys, and SHA-256-derived keys. |
-| `KeyExchangeTest` | DH public-key serialization and shared-secret agreement. |
+| `PqcCryptoTest` | AES-256-GCM authentication and ML-KEM-768 shared-secret agreement. |
+| Archived legacy tests | Historical DH/AES helper behavior under `com.zerotrust.legacy`. |
 | `AsyncPeerTest` | Network lifecycle, readiness, peer IDs, key exchange, callbacks, queueing, and cleanup. |
 
 There are currently no dedicated tests for `Main`, the synchronous `Client`/`Server` echo path, malformed wire lines, authentication, replay, or protocol version negotiation.

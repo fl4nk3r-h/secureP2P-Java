@@ -85,7 +85,7 @@ The project is a useful protocol and concurrency demonstration, but it does not 
 
 - **Peer identity is not authenticated.** The current DH exchange has no certificate, pinned identity key, signature, or verified fingerprint, so an active attacker can perform a man-in-the-middle attack.
 - **The live cipher is not an authenticated encryption protocol.** `AsyncPeer` still uses the legacy `CryptoUtils` transformation, whose mode and padding are implicit and which provides no authentication tag, replay protection, or message ordering guarantees.
-- **PQC is not active in peer sessions.** `MlKemKeyExchange` proves ML-KEM-768 encapsulation and decapsulation in isolation, but the live handshake still uses `KeyExchange` and legacy DH.
+- **PQC peer authentication is not complete.** The live handshake uses ML-KEM-768, but exchanged keys are not bound to authenticated peer identities, so ML-KEM alone does not prevent man-in-the-middle attacks.
 - **AES-GCM is not active in peer sessions.** `AeadCrypto` provides the planned AES-256-GCM primitive, but the live protocol does not yet supply ratchet-managed keys, authenticated headers, or enforced nonce/key lifecycle rules.
 - **The Double Ratchet is not implemented.** There is no production-grade forward-secrecy, post-compromise recovery, skipped-message-key handling, or out-of-order message state machine.
 - **The wire protocol is still a legacy line protocol.** It has no authenticated version negotiation, downgrade rejection, strict frame-size limits, structured message types, or robust malformed-frame handling.

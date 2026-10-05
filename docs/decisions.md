@@ -33,7 +33,7 @@ The project version is now `2.0.0-SNAPSHOT`. This is a major-version development
 
 ## ADR-002: Select ML-KEM-768 for the initial PQC KEM
 
-**Status:** In progress
+**Status:** Implemented foundation; protocol hardening pending
 
 **Decision:** Use ML-KEM-768 for the initial encapsulation/decapsulation foundation.
 
@@ -45,7 +45,7 @@ The project version is now `2.0.0-SNAPSHOT`. This is a major-version development
 
 ## ADR-003: Use explicit AES-256-GCM instead of provider-default AES
 
-**Status:** In progress
+**Status:** Implemented foundation; ratchet hardening pending
 
 **Decision:** Use `AES/GCM/NoPadding` with 256-bit keys, 12-byte random nonces, 128-bit authentication tags, and caller-supplied associated data.
 
@@ -53,7 +53,7 @@ The project version is now `2.0.0-SNAPSHOT`. This is a major-version development
 
 **Current evidence:** `AeadCrypto` implements nonce-prefixing and AAD, and tests verify round trips, nonce variation, modified-ciphertext rejection, and modified-AAD rejection.
 
-**Consequence:** The future session layer must guarantee nonce uniqueness per key, bind protocol version/message metadata as AAD, reject nonce reuse, and rotate message keys through the ratchet. `AeadCrypto` alone does not provide replay protection or peer authentication.
+**Consequence:** The current session layer uses the primitive and authenticates a fixed message context, but it does not yet provide replay protection or ratchet-managed key rotation. Those controls remain required before production use.
 
 ## ADR-004: Break wire compatibility with a versioned secure protocol
 
@@ -115,13 +115,13 @@ The project version is now `2.0.0-SNAPSHOT`. This is a major-version development
 
 ## ADR-008: Fail closed before session establishment
 
-**Status:** Implemented for the current legacy session; v2 enforcement remains pending
+**Status:** Implemented for the current PQC session; authenticated v2 enforcement remains pending
 
 **Decision:** Sending application messages before authenticated session establishment will fail instead of sending plaintext or unauthenticated ciphertext.
 
-**Why:** The current `AsyncPeer.sendMessageAsync` sends plaintext whenever `encryptionKey` is null. This is a direct confidentiality failure caused by asynchronous ordering. Session state must be explicit and enforced by the session owner.
+**Why:** Asynchronous ordering previously allowed sends before a session key existed. Session state must be explicit and enforced by the session owner.
 
-**Required behavior:** reject sends in `NEW`, `CONNECTED`, `AUTHENTICATING`, `FAILED`, and `CLOSED`; allow sends only in `ESTABLISHED`; surface the failure through the send callback and error callback. The extracted `SessionManager` now rejects sends before the current legacy key exchange completes; authenticated v2 state enforcement remains pending.
+**Required behavior:** reject sends in `NEW`, `CONNECTED`, `AUTHENTICATING`, `FAILED`, and `CLOSED`; allow sends only in `ESTABLISHED`; surface the failure through the send callback and error callback. The extracted `SessionManager` now rejects sends before the PQC bootstrap completes; authenticated v2 state enforcement remains pending.
 
 ## ADR-009: Test security properties, not only successful exchanges
 
@@ -147,11 +147,11 @@ Still pending:
 - Authenticated identity provisioning and pin verification.
 - Versioned v2 handshake and downgrade rejection.
 - Double Ratchet state machine and skipped-message handling.
-- Wiring the new primitives into `AsyncPeer`.
+- Authenticated identity, replay protection, and ratchet wiring into `SessionManager`.
 
 Implemented in this migration batch:
 
 - `PeerConnection`, `MessageListener`, and `SessionManager` extraction.
 - Peer-only `Main` CLI; legacy `server` and `client` options were removed.
 
-Until those items are complete, the live peer protocol must continue to be treated as legacy unauthenticated DH/AES and unsuitable for hostile networks.
+Until those items are complete, the live peer protocol must continue to be treated as an unauthenticated ML-KEM bootstrap plus AES-GCM without replay or ratchet guarantees, and unsuitable for hostile networks.
