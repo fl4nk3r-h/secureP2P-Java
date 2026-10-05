@@ -305,7 +305,7 @@ public class Main {
                 System.out.println("  Local AsyncPeer: " + peerName);
                 System.out.println("  Remote AsyncPeer: " + remotePeerId);
                 System.out.println("  Status: CONNECTED & PAIRED");
-                System.out.println("  Encryption: AES-256 (Quantum-Safe)");
+                System.out.println("  Encryption: legacy session encryption (v2 migration in progress)");
                 System.out.println();
                 System.out.print(peerName + "> ");
                 break;
