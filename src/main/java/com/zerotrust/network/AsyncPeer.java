@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 /**
@@ -16,6 +17,7 @@ public class AsyncPeer {
     private final PeerConnection peerConnection;
     private final SessionManager sessionManager;
     private final MessageListener messageListener;
+    private final AtomicBoolean closed = new AtomicBoolean();
     private volatile Consumer<Exception> onError;
     private volatile Consumer<Boolean> onSendComplete;
 
@@ -100,6 +102,9 @@ public class AsyncPeer {
     }
 
     public void close() {
+        if (!closed.compareAndSet(false, true)) {
+            return;
+        }
         peerConnection.close();
         messageListener.close();
         sessionManager.close();
