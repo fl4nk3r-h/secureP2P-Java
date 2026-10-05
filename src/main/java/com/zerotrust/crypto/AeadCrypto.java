@@ -20,7 +20,8 @@ public final class AeadCrypto {
     }
 
     /**
-     * Returns a self-contained value containing nonce followed by ciphertext and tag.
+     * Returns a self-contained value containing nonce followed by ciphertext and
+     * tag.
      */
     public static byte[] encrypt(byte[] plaintext, byte[] key, byte[] associatedData)
             throws GeneralSecurityException {
