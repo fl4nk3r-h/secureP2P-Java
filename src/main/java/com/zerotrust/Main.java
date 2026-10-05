@@ -19,6 +19,7 @@ import com.zerotrust.network.AsyncPeer;
  * 
  * @author fl4nk3r-h
  * @version 2.0.0
+ * @see AsyncPeer
  */
 public class Main {
 
@@ -161,6 +162,24 @@ public class Main {
         }
     }
 
+    /**
+     * Blocks until the peer has either accepted an incoming connection or
+     * established an outgoing one.
+     * <p>
+     * Wires an error callback into the peer so failures surface through
+     * {@code asyncFailure} and the waiting latch is released on both success and
+     * error paths.
+     * </p>
+     *
+     * @param peer          The peer used to perform the connection
+     * @param asyncFailure  Holder receiving the first asynchronous error, if any
+     * @param listener      True to wait for an incoming connection, false to
+     *                      connect to a remote peer
+     * @param remoteHost    Remote host for connect mode, ignored in listen mode
+     * @param remotePort    Remote port for connect mode, ignored in listen mode
+     * @throws Exception if the connection fails or does not complete within the
+     *                  configured timeout
+     */
     private static void awaitConnection(AsyncPeer peer, AtomicReference<Exception> asyncFailure,
             boolean listener, String remoteHost, int remotePort) throws Exception {
         CountDownLatch connected = new CountDownLatch(1);
@@ -188,6 +207,14 @@ public class Main {
         }
     }
 
+    /**
+     * Blocks until the asynchronous ML-KEM key exchange has completed.
+     *
+     * @param peer          The peer performing the key exchange
+     * @param asyncFailure  Holder receiving the first asynchronous error, if any
+     * @throws Exception if the key exchange fails or exceeds the configured
+     *                  timeout
+     */
     private static void awaitKeyExchange(AsyncPeer peer, AtomicReference<Exception> asyncFailure) throws Exception {
         CountDownLatch completed = new CountDownLatch(1);
         peer.onError(exception -> {
@@ -208,6 +235,17 @@ public class Main {
         }
     }
 
+    /**
+     * Registers a console display handler for incoming messages.
+     * <p>
+     * Each received message is printed with the remote peer's display name, and
+     * the local prompt is re-issued afterwards.
+     * </p>
+     *
+     * @param peer          The peer whose received messages are displayed
+     * @param peerName      The local peer's display name
+     * @param remotePeerId  The remote peer's identifier
+     */
     private static void registerMessageDisplay(AsyncPeer peer, String peerName, String remotePeerId) {
         String localDisplayName = (peerName != null && !peerName.isBlank()) ? peerName : peer.getPeerId();
         String remoteDisplayName = (remotePeerId != null && !remotePeerId.isBlank()) ? remotePeerId : "Remote";
