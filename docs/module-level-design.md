@@ -2,6 +2,8 @@
 
 This document describes the codebase at package, class, and interaction level. The diagrams are intentionally limited to classes and relationships that exist in `src/main/java`.
 
+Design rationale and unresolved security gates are tracked in [Architecture and Security Decisions](decisions.md).
+
 ## Module map
 
 ```mermaid
