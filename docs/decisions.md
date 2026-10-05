@@ -66,7 +66,7 @@ This document records decisions made during the security-hardening migration. It
 
 ## ADR-005: Keep `AsyncPeer` as a façade while splitting ownership
 
-**Status:** Accepted
+**Status:** Implemented
 
 **Decision:** Extract three focused modules: `PeerConnection`, `MessageListener`, and `SessionManager`. Retain `AsyncPeer` as a thin façade during migration.
 
@@ -109,13 +109,13 @@ This document records decisions made during the security-hardening migration. It
 
 ## ADR-008: Fail closed before session establishment
 
-**Status:** Accepted direction; implementation pending
+**Status:** Implemented for the current legacy session; v2 enforcement remains pending
 
 **Decision:** Sending application messages before authenticated session establishment will fail instead of sending plaintext or unauthenticated ciphertext.
 
 **Why:** The current `AsyncPeer.sendMessageAsync` sends plaintext whenever `encryptionKey` is null. This is a direct confidentiality failure caused by asynchronous ordering. Session state must be explicit and enforced by the session owner.
 
-**Required behavior:** reject sends in `NEW`, `CONNECTED`, `AUTHENTICATING`, `FAILED`, and `CLOSED`; allow sends only in `ESTABLISHED`; surface the failure through the send callback and error callback.
+**Required behavior:** reject sends in `NEW`, `CONNECTED`, `AUTHENTICATING`, `FAILED`, and `CLOSED`; allow sends only in `ESTABLISHED`; surface the failure through the send callback and error callback. The extracted `SessionManager` now rejects sends before the current legacy key exchange completes; authenticated v2 state enforcement remains pending.
 
 ## ADR-009: Test security properties, not only successful exchanges
 
@@ -136,12 +136,16 @@ Implemented now:
 - AES-256-GCM with nonce and AAD handling.
 - Focused primitive tests.
 
-Not implemented yet:
+Still pending:
 
-- `PeerConnection`, `MessageListener`, and `SessionManager` extraction.
 - Authenticated identity provisioning and pin verification.
 - Versioned v2 handshake and downgrade rejection.
 - Double Ratchet state machine and skipped-message handling.
 - Wiring the new primitives into `AsyncPeer`.
+
+Implemented in this migration batch:
+
+- `PeerConnection`, `MessageListener`, and `SessionManager` extraction.
+- Peer-only `Main` CLI; legacy `server` and `client` options were removed.
 
 Until those items are complete, the live peer protocol must continue to be treated as legacy unauthenticated DH/AES and unsuitable for hostile networks.
