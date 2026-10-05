@@ -97,4 +97,4 @@ sequenceDiagram
 - The current CLI uses fixed defaults: echo mode uses port `12345`; interactive mode defaults to local port `9000`, listen mode, and generated peer ID.
 - There is no version field or negotiation step in the wire protocol.
 
-For implementation details, see [Low-Level Design](low-level-design.md). For security implications, see [Security Notes](security.md).
+For package boundaries and diagrams, see [Module-Level Design](module-level-design.md). For method-level implementation details, see [Low-Level Design](low-level-design.md). For security implications, see [Security Notes](security.md).
