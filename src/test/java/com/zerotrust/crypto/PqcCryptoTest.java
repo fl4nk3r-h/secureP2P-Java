@@ -36,15 +36,15 @@ class PqcCryptoTest {
 
         second[second.length - 1] ^= 1;
         assertThrows(Exception.class, () -> AeadCrypto.decrypt(second, key, aad));
-        assertThrows(Exception.class, () -> AeadCrypto.decrypt(first, key, "wrong-header".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        assertThrows(Exception.class,
+                () -> AeadCrypto.decrypt(first, key, "wrong-header".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
     }
 
     @Test
     void mlKem768ProducesMatchingSharedSecret() throws Exception {
         KeyPair recipient = MlKemKeyExchange.generateKeyPair();
 
-        MlKemKeyExchange.Encapsulation encapsulation =
-                MlKemKeyExchange.encapsulate(recipient.getPublic().getEncoded());
+        MlKemKeyExchange.Encapsulation encapsulation = MlKemKeyExchange.encapsulate(recipient.getPublic().getEncoded());
         byte[] decapsulated = MlKemKeyExchange.decapsulate(
                 recipient.getPrivate().getEncoded(), encapsulation.ciphertext());
 
