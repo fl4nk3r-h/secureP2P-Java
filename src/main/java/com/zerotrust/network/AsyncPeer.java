@@ -91,6 +91,10 @@ public class AsyncPeer {
         return peerConnection.isConnected();
     }
 
+    public boolean waitForConnectionReady(long timeoutMillis) throws InterruptedException {
+        return peerConnection.waitUntilReady(timeoutMillis);
+    }
+
     public boolean isEncrypted() {
         return sessionManager.isEncrypted();
     }
