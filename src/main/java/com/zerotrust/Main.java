@@ -6,20 +6,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 import com.zerotrust.network.AsyncPeer;
-import com.zerotrust.network.Client;
-import com.zerotrust.network.Server;
 
 /**
  * Main entry point for the Secure P2P Communication System.
  * <p>
- * This application provides three operational modes:
- * <ul>
- * <li><b>Server Mode:</b> Starts a server that listens for incoming
- * connections</li>
- * <li><b>Client Mode:</b> Connects to a server and sends/receives messages</li>
- * <li><b>Interactive Peer Mode:</b> Enables bidirectional P2P chat with
- * encryption</li>
- * </ul>
+ * This application provides interactive peer-to-peer chat mode.
  * </p>
  * 
  * @author fl4nk3r
@@ -37,13 +28,12 @@ public class Main {
      * Main entry point of the application.
      * <p>
      * Parses command-line arguments to determine the operational mode and
-     * initializes the appropriate component (Server, Client, or Interactive Peer).
+    * initializes the interactive peer component.
      * </p>
      * 
      * @param args Command-line arguments:
      *             <ul>
-     *             <li>args[0]: Mode ("server", "client", "peer", or
-     *             "interactive")</li>
+    *             <li>args[0]: Mode ("peer" or "interactive")</li>
      *             <li>args[1+]: Additional mode-specific parameters</li>
      *             </ul>
      */
@@ -52,21 +42,7 @@ public class Main {
             if (args.length > 0) {
                 String mode = args[0];
 
-                if (mode.equals("server")) {
-                    System.out.println("Starting Secure P2P Server...");
-                    Server server = new Server(12345);
-                    server.start();
-                    server.close();
-
-                } else if (mode.equals("client")) {
-                    System.out.println("Starting Secure P2P Client...");
-                    Client client = new Client("localhost", 12345);
-                    client.sendMessage("Hello from Secure P2P Client!");
-                    String response = client.receiveMessage();
-                    System.out.println("Response: " + response);
-                    client.close();
-
-                } else if (mode.equals("peer") || mode.equals("interactive")) {
+                if (mode.equals("peer") || mode.equals("interactive")) {
                     startInteractivePeerMode(args);
 
                 } else {
@@ -91,8 +67,8 @@ public class Main {
      * command-based
      * interface. The peer can either listen for incoming connections or connect to
      * another peer.
-     * All communications are encrypted using quantum-safe AES-256 encryption after
-     * key exchange.
+    * Communications use the currently configured session implementation after
+    * key exchange.
      * </p>
      * 
      * @param args Command-line arguments:
@@ -352,17 +328,13 @@ public class Main {
      * <p>
      * Displays command-line syntax and examples for:
      * <ul>
-     * <li>Server mode</li>
-     * <li>Client mode</li>
      * <li>Interactive peer mode (both listening and connecting)</li>
      * </ul>
      * </p>
      */
     private static void printUsage() {
         System.out.println("Usage:");
-        System.out.println(" java Main server - Start as server");
-        System.out.println(" java Main client - Start as client");
-        System.out.println(" java Main peer [port] [listen] - Start as peer");
+        System.out.println(" java Main peer [name] [port] [listen|connect] [host] [remotePort]");
         System.out.println("");
         System.out.println("Interactive P2P Chat (NEW):");
         System.out.println(" java Main interactive [name] [port] listen");
