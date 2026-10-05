@@ -11,7 +11,27 @@ import java.util.function.Consumer;
 import com.zerotrust.crypto.AeadCrypto;
 import com.zerotrust.crypto.MlKemKeyExchange;
 
-/** Owns peer identity exchange and the ML-KEM/AES-GCM session state. */
+/**
+ * Owns peer identity exchange and the ML-KEM/AES-GCM session state.
+ * <p>
+ * Implements the v2 wire protocol:
+ * </p>
+ * <ul>
+ * <li>{@code PEER_ID:<id>} - identity handshake</li>
+ * <li>{@code PQC_V2:ML-KEM-768:<base64 key>} - public key frame</li>
+ * <li>{@code PQC_CT:<base64 ciphertext>} - KEM ciphertext frame</li>
+ * </ul>
+ * <p>
+ * After both sides complete the KEM exchange, both derive the same 32-byte
+ * session key (deterministic ordering by peer id, SHA-256) used for AES-256-GCM
+ * message encryption.
+ * </p>
+ *
+ * @author fl4nk3r-h
+ * @version 2.0.0
+ * @see MlKemKeyExchange
+ * @see AeadCrypto
+ */
 public final class SessionManager {
     private static final String KEM_FRAME_PREFIX = "PQC_V2:ML-KEM-768:";
     private static final String CIPHERTEXT_FRAME_PREFIX = "PQC_CT:";
@@ -24,6 +44,14 @@ public final class SessionManager {
     private volatile String remotePeerId;
     private volatile byte[] sessionKey;
 
+    /**
+     * Creates a session for the local peer and generates its ML-KEM key pair.
+     *
+     * @param localPeerId     Identifier of this peer
+     * @param connection      Connected transport used to exchange frames
+     * @param executorService Executor running asynchronous session tasks
+     * @throws Exception if ML-KEM key pair generation fails
+     */
     public SessionManager(String localPeerId, PeerConnection connection, ExecutorService executorService)
             throws Exception {
         this.localPeerId = localPeerId;
@@ -32,6 +60,13 @@ public final class SessionManager {
         this.kemKeyPair = MlKemKeyExchange.generateKeyPair();
     }
 
+    /**
+     * Performs the blocking peer identity handshake.
+     *
+     * @return The remote peer's identifier
+     * @throws IOException if the connection is not ready or the peer sends an
+     *                     invalid {@code PEER_ID:} frame
+     */
     public String exchangePeerId() throws IOException {
         connection.sendLine("PEER_ID:" + localPeerId);
         String line = connection.readLine();
@@ -42,6 +77,14 @@ public final class SessionManager {
         return remotePeerId;
     }
 
+    /**
+     * Asynchronously runs the ML-KEM key exchange: publishes the local public
+     * key, encapsulates against the remote key, publishes the ciphertext,
+     * decapsulates the remote ciphertext, and derives the session key.
+     *
+     * @param onComplete Invoked after the session key is established
+     * @param onError    Invoked with the cause when the exchange fails
+     */
     public void performKeyExchangeAsync(Runnable onComplete, Consumer<Exception> onError) {
         executorService.execute(() -> {
             try {
@@ -78,6 +121,13 @@ public final class SessionManager {
         });
     }
 
+    /**
+     * Asynchronously encrypts and sends a message over the established session.
+     *
+     * @param message  Plaintext message to send
+     * @param callback Invoked with {@code true} on success, {@code false} on
+     *                 failure
+     */
     public void sendMessageAsync(String message, Consumer<Boolean> callback) {
         executorService.execute(() -> {
             boolean success = false;
@@ -100,6 +150,13 @@ public final class SessionManager {
         });
     }
 
+    /**
+     * Decrypts a Base64-encoded wire message using the session key.
+     *
+     * @param encryptedMessage Base64-encoded AES-GCM payload
+     * @return The decoded plaintext message
+     * @throws Exception if the session is not established or decryption fails
+     */
     public String decrypt(String encryptedMessage) throws Exception {
         if (!isEncrypted()) {
             throw new IllegalStateException("Session is not established");
@@ -109,22 +166,49 @@ public final class SessionManager {
         return new String(plaintext, StandardCharsets.UTF_8);
     }
 
+    /**
+     * @return {@code true} if the key exchange has completed and a session key
+     *         is available
+     */
     public boolean isEncrypted() {
         return sessionKey != null;
     }
 
+    /**
+     * @return The identifier of the local peer
+     */
     public String getLocalPeerId() {
         return localPeerId;
     }
 
+    /**
+     * @return The remote peer's identifier, or {@code null} before the identity
+     *         exchange completes
+     */
     public String getRemotePeerId() {
         return remotePeerId;
     }
 
+    /**
+     * Discards the session key, ending the secure session.
+     */
     public void close() {
         sessionKey = null;
     }
 
+    /**
+     * Derives the 32-byte session key from both KEM secrets.
+     * <p>
+     * Both peers order the secrets by peer-id comparison so the SHA-256 input
+     * is identical on both sides.
+     * </p>
+     *
+     * @param outgoingSecret Shared secret from the local encapsulation
+     * @param incomingSecret Shared secret recovered from the remote ciphertext
+     * @return The 32-byte derived session key
+     * @throws Exception if the peer identity was not exchanged or the digest
+     *                  is unavailable
+     */
     private byte[] deriveSessionKey(byte[] outgoingSecret, byte[] incomingSecret) throws Exception {
         if (remotePeerId == null || remotePeerId.isBlank()) {
             throw new IllegalStateException("Peer identity exchange is required before key exchange");
