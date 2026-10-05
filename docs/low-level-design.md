@@ -10,8 +10,13 @@ com.zerotrust
   crypto/
     CryptoUtils.java
     KeyExchange.java
+    AeadCrypto.java
+    MlKemKeyExchange.java
   network/
     AsyncPeer.java
+    PeerConnection.java
+    SessionManager.java
+    MessageListener.java
     Client.java
     Server.java
 ```
@@ -22,14 +27,16 @@ com.zerotrust
 
 | Mode | Arguments | Behavior |
 | --- | --- | --- |
-| `server` | none | Starts `Server` on port `12345` and blocks while serving one client. |
-| `client` | none | Connects to `localhost:12345`, sends a greeting, prints the echo, and closes. |
 | `peer` | Same as `interactive` | Alias for interactive peer mode. |
 | `interactive` | `[peerId] [localPort] [listen\|connect] [host] [remotePort]` | Runs encrypted terminal chat. Host and remote port apply to `connect`. |
 
 Invalid or missing modes print usage information. Exceptions are reported to standard error.
 
-## `Client`
+## Legacy `Client` and `Server` classes
+
+These classes remain as source-level synchronous echo examples but are no longer selectable through `Main`.
+
+### `Client`
 
 ```java
 Client(String address, int port) throws IOException
@@ -40,7 +47,7 @@ void close() throws IOException
 
 The constructor opens the socket and creates auto-flushing text streams. `sendMessage` writes one line. `receiveMessage` blocks until a line or EOF. This class has no encryption or retry behavior.
 
-## `Server`
+### `Server`
 
 ```java
 Server(int port) throws IOException
@@ -61,7 +68,7 @@ void connectToPeerAsync(String address, int port, Consumer<AsyncPeer> callback)
 boolean waitForConnectionReady(long timeoutMillis) throws InterruptedException
 ```
 
-Construction immediately binds `port`, creates a DH `KeyExchange`, a four-thread executor, and a message queue. Accept/connect methods initialize `peerSocket`, `PrintWriter`, and `BufferedReader` asynchronously. Callers must wait for readiness before using the streams.
+Construction creates a four-thread executor and delegates transport setup to `PeerConnection`, session state to `SessionManager`, and inbound delivery to `MessageListener`. The `PeerConnection` binds `port`; accept/connect methods initialize its socket and streams asynchronously. Callers must wait for readiness before using the streams.
 
 ### Handshake
 
@@ -86,9 +93,9 @@ void onError(Consumer<Exception> callback)
 void onSendComplete(Consumer<Boolean> callback)
 ```
 
-After the key is set, sends are Base64-encoded ciphertext lines. Before the key is set, the current implementation sends plaintext, so callers must enforce handshake ordering. The receive thread puts the raw line into `messageQueue`; a worker decrypts the line and invokes `onMessageReceived` with the plaintext. `pollMessage()` therefore returns the queued wire value, not the callback payload.
+After the key is set, sends are Base64-encoded ciphertext lines. Before the key is set, `SessionManager` rejects the send instead of transmitting plaintext. `MessageListener` puts the raw line into `messageQueue`; a worker decrypts the line and invokes `onMessageReceived` with the plaintext. `pollMessage()` therefore returns the queued wire value, not the callback payload.
 
-The registered `onSendComplete` field is currently not invoked by the implementation. The per-call callback supplied to `sendMessageAsync` is invoked with `true` or `false`.
+The registered `onSendComplete` callback is used when a per-call callback is not supplied. Callbacks receive `true` only after the delegated transport write succeeds and `false` when session or transport handling fails.
 
 ### State and lifecycle methods
 
@@ -109,7 +116,7 @@ constructed -> accepting/connecting -> connection ready
            -> peer IDs exchanged -> key exchange complete -> messaging -> closed
 ```
 
-`close()` closes sockets and streams, stops the listener, and shuts down the executor. Use it in a `finally` block.
+`close()` closes the transport first to unblock the listener, stops message delivery, clears session state, and shuts down the executor. Use it in a `finally` block.
 
 ## `CryptoUtils`
 
