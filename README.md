@@ -67,8 +67,7 @@ mvn test
 Run focused suites:
 
 ```bash
-mvn test -Dtest=CryptoUtilsTest
-mvn test -Dtest=KeyExchangeTest
+mvn test -Dtest=PqcCryptoTest
 mvn test -Dtest=AsyncPeerTest
 ```
 

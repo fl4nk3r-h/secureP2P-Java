@@ -23,19 +23,18 @@ mvn clean package
 mvn clean install
 
 # Run one suite
-mvn test -Dtest=CryptoUtilsTest
-mvn test -Dtest=KeyExchangeTest
+mvn test -Dtest=PqcCryptoTest
 mvn test -Dtest=AsyncPeerTest
 
 # Run one test method
-mvn test -Dtest=CryptoUtilsTest#testEncryption
+mvn test -Dtest=PqcCryptoTest#aesGcmRoundTripBindsAssociatedData
 ```
 
 The packaged artifact is `target/securep2p-2.0.0-SNAPSHOT.jar`.
 
 ## Test scope
 
-`CryptoUtilsTest` checks AES key generation, encryption/decryption, and key derivation. `KeyExchangeTest` checks public-key exchange and shared-secret agreement. `AsyncPeerTest` exercises asynchronous connection setup, readiness, peer-ID exchange, key exchange, callbacks, queue behavior, and cleanup.
+The archived `com.zerotrust.legacy` tests preserve the old DH/AES behavior for comparison. `PqcCryptoTest` covers AES-256-GCM authentication and ML-KEM-768 agreement. `AsyncPeerTest` exercises asynchronous connection setup, readiness, peer-ID exchange, PQC session bootstrap, callbacks, queue behavior, and cleanup.
 
 `PqcCryptoTest` covers the migration foundation: AES-256-GCM round trips, associated-data authentication, modified-ciphertext rejection, nonce variation, and ML-KEM-768 encapsulation/decapsulation.
 

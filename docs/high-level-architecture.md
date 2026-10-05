@@ -70,7 +70,7 @@ sequenceDiagram
     B->>A: Base64 AES-GCM payload
 ```
 
-`MessageListener` queues the received wire line immediately. Its message callback receives a separately decrypted value. This compatibility behavior remains documented until the v2 session API replaces raw-wire polling.
+`MessageListener` queues the received wire line immediately. Its message callback receives a separately decrypted AES-GCM value. This compatibility behavior remains documented until the v2 session API replaces raw-wire polling.
 
 ## Architectural constraints
 
