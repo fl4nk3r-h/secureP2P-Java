@@ -52,7 +52,7 @@ The package currently contains two related but separate network paths:
 
 ### `com.zerotrust.crypto`
 
-**Owners:** `CryptoUtils` and `KeyExchange`
+**Owners:** `CryptoUtils`, `KeyExchange`, `AeadCrypto`, and `MlKemKeyExchange`
 
 Responsibilities:
 
@@ -60,8 +60,10 @@ Responsibilities:
 - Compute the DH shared secret.
 - Derive AES keys from shared-secret text.
 - Encrypt and decrypt message strings.
+- Provide explicit AES-256-GCM payload protection with nonces and associated data.
+- Provide ML-KEM-768 key encapsulation and decapsulation through the pinned provider.
 
-This module has no socket or CLI dependencies. Its current algorithms and limitations are documented in [Security Notes](security.md).
+This module has no socket or CLI dependencies. The new PQC classes are migration foundations and are not yet wired into `AsyncPeer`. Current algorithms and limitations are documented in [Security Notes](security.md).
 
 ## Implemented class diagram
 
@@ -136,12 +138,25 @@ classDiagram
         +getSharedSecretString(String) String
     }
 
+    class AeadCrypto {
+        +encrypt(byte[], byte[], byte[]) byte[]
+        +decrypt(byte[], byte[], byte[]) byte[]
+    }
+
+    class MlKemKeyExchange {
+        +generateKeyPair() KeyPair
+        +encapsulate(byte[]) Encapsulation
+        +decapsulate(byte[], byte[]) byte[]
+    }
+
     Main ..> Client : constructs
     Main ..> Server : constructs
     Main ..> AsyncPeer : constructs
     AsyncPeer *-- KeyExchange : owns
     AsyncPeer ..> CryptoUtils : encrypts/decrypts
     KeyExchange ..> CryptoUtils : shared-secret key derivation by caller
+    AsyncPeer ..> AeadCrypto : migration target
+    AsyncPeer ..> MlKemKeyExchange : migration target
     Client ..> Socket : uses
     Server ..> ServerSocket : uses
     AsyncPeer ..> Socket : uses
