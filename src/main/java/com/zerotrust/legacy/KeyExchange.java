@@ -9,7 +9,10 @@ import java.util.Base64;
 
 import javax.crypto.KeyAgreement;
 
-/** Archived pre-v2 finite-field DH exchange. Not used by the active peer protocol. */
+/**
+ * Archived pre-v2 finite-field DH exchange. Not used by the active peer
+ * protocol.
+ */
 @Deprecated(forRemoval = false)
 public class KeyExchange {
     private KeyPair keyPair;
