@@ -6,7 +6,9 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
 
-/** Archived plaintext TCP echo client. Not exposed by Main or active peer code. */
+/**
+ * Archived plaintext TCP echo client. Not exposed by Main or active peer code.
+ */
 @Deprecated(forRemoval = false)
 public class Client {
     private final Socket socket;
