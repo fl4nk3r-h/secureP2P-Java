@@ -21,9 +21,9 @@ The rationale and status of the migration choices are recorded in [Architecture 
 
 The DH exchange has no certificate, fingerprint, pre-shared key, or authenticated public-key check. An active network attacker can replace both public keys and establish separate sessions with each endpoint. The exchanged peer ID is only a string and is not proof of identity.
 
-### No ciphertext authentication
+### No ciphertext authentication in the live protocol
 
-The default `AES` transformation does not provide an authentication tag. An attacker can modify, replay, reorder, or inject lines; decryption errors may be reported, but there is no protocol-level authenticity or replay protection.
+The live `AsyncPeer` protocol uses the legacy `AES` transformation, which does not provide an authentication tag. An attacker can modify, replay, reorder, or inject lines; decryption errors may be reported, but there is no protocol-level authenticity or replay protection. `AeadCrypto` contains the planned AES-GCM primitive, but it is not wired into live sessions yet.
 
 ### Weak and implicit cryptographic choices
 
@@ -31,7 +31,7 @@ The implementation uses 1024-bit finite-field DH and leaves the AES mode and pad
 
 ### Ordering and plaintext hazards
 
-`sendMessageAsync` sends plaintext if called before `encryptionKey` is initialized. `performKeyExchangeAsync` is asynchronous and returns immediately, so application code must wait for completion. The CLI currently prints completion immediately after scheduling the exchange.
+`SessionManager` now rejects `sendMessageAsync` before `encryptionKey` is initialized, preventing the previous plaintext-before-key behavior. `performKeyExchangeAsync` is still asynchronous and returns immediately, so application code must wait for completion. The CLI currently prints completion immediately after scheduling the exchange.
 
 ### Metadata and operational exposure
 
