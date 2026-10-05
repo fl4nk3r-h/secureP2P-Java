@@ -1,29 +1,35 @@
 package com.zerotrust.network;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.KeyPair;
+import java.security.MessageDigest;
+import java.util.Base64;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
 
-import javax.crypto.SecretKey;
+import com.zerotrust.crypto.AeadCrypto;
+import com.zerotrust.crypto.MlKemKeyExchange;
 
-import com.zerotrust.crypto.CryptoUtils;
-import com.zerotrust.crypto.KeyExchange;
-
-/** Owns peer identity exchange and the current session encryption state. */
+/** Owns peer identity exchange and the ML-KEM/AES-GCM session state. */
 public final class SessionManager {
+    private static final String KEM_FRAME_PREFIX = "PQC_V2:ML-KEM-768:";
+    private static final String CIPHERTEXT_FRAME_PREFIX = "PQC_CT:";
+    private static final byte[] MESSAGE_AAD = "securep2p-v2:message".getBytes(StandardCharsets.UTF_8);
+
     private final String localPeerId;
     private final PeerConnection connection;
     private final ExecutorService executorService;
-    private final KeyExchange keyExchange;
+    private final KeyPair kemKeyPair;
     private volatile String remotePeerId;
-    private volatile SecretKey encryptionKey;
+    private volatile byte[] sessionKey;
 
     public SessionManager(String localPeerId, PeerConnection connection, ExecutorService executorService)
             throws Exception {
         this.localPeerId = localPeerId;
         this.connection = connection;
         this.executorService = executorService;
-        this.keyExchange = new KeyExchange();
+        this.kemKeyPair = MlKemKeyExchange.generateKeyPair();
     }
 
     public String exchangePeerId() throws IOException {
@@ -39,13 +45,28 @@ public final class SessionManager {
     public void performKeyExchangeAsync(Runnable onComplete, Consumer<Exception> onError) {
         executorService.execute(() -> {
             try {
-                connection.sendLine(keyExchange.getPublicKeyString());
-                String peerPublicKey = connection.readLine();
-                if (peerPublicKey == null || peerPublicKey.isBlank()) {
-                    throw new IOException("Peer public key was empty");
+                connection.sendLine(KEM_FRAME_PREFIX + Base64.getEncoder().encodeToString(
+                        kemKeyPair.getPublic().getEncoded()));
+                String peerKeyFrame = connection.readLine();
+                if (peerKeyFrame == null || !peerKeyFrame.startsWith(KEM_FRAME_PREFIX)) {
+                    throw new IOException("Invalid ML-KEM public key frame");
                 }
-                String sharedSecret = keyExchange.getSharedSecretString(peerPublicKey);
-                encryptionKey = CryptoUtils.getKeyFromString(sharedSecret);
+
+                byte[] peerPublicKey = Base64.getDecoder().decode(
+                        peerKeyFrame.substring(KEM_FRAME_PREFIX.length()));
+                MlKemKeyExchange.Encapsulation outgoing = MlKemKeyExchange.encapsulate(peerPublicKey);
+                connection.sendLine(CIPHERTEXT_FRAME_PREFIX
+                        + Base64.getEncoder().encodeToString(outgoing.ciphertext()));
+
+                String incomingFrame = connection.readLine();
+                if (incomingFrame == null || !incomingFrame.startsWith(CIPHERTEXT_FRAME_PREFIX)) {
+                    throw new IOException("Invalid ML-KEM ciphertext frame");
+                }
+                byte[] incomingCiphertext = Base64.getDecoder().decode(
+                        incomingFrame.substring(CIPHERTEXT_FRAME_PREFIX.length()));
+                byte[] incomingSecret = MlKemKeyExchange.decapsulate(
+                        kemKeyPair.getPrivate().getEncoded(), incomingCiphertext);
+                sessionKey = deriveSessionKey(outgoing.sharedSecret(), incomingSecret);
                 if (onComplete != null) {
                     onComplete.run();
                 }
@@ -64,7 +85,9 @@ public final class SessionManager {
                 if (!isEncrypted()) {
                     throw new IllegalStateException("Session is not established");
                 }
-                connection.sendLine(CryptoUtils.encrypt(message, encryptionKey));
+                byte[] plaintext = message.getBytes(StandardCharsets.UTF_8);
+                byte[] encrypted = AeadCrypto.encrypt(plaintext, sessionKey, MESSAGE_AAD);
+                connection.sendLine(Base64.getEncoder().encodeToString(encrypted));
                 success = true;
             } catch (Exception exception) {
                 if (callback != null) {
@@ -81,11 +104,13 @@ public final class SessionManager {
         if (!isEncrypted()) {
             throw new IllegalStateException("Session is not established");
         }
-        return CryptoUtils.decrypt(encryptedMessage, encryptionKey);
+        byte[] encrypted = Base64.getDecoder().decode(encryptedMessage);
+        byte[] plaintext = AeadCrypto.decrypt(encrypted, sessionKey, MESSAGE_AAD);
+        return new String(plaintext, StandardCharsets.UTF_8);
     }
 
     public boolean isEncrypted() {
-        return encryptionKey != null;
+        return sessionKey != null;
     }
 
     public String getLocalPeerId() {
@@ -97,6 +122,19 @@ public final class SessionManager {
     }
 
     public void close() {
-        encryptionKey = null;
+        sessionKey = null;
+    }
+
+    private byte[] deriveSessionKey(byte[] outgoingSecret, byte[] incomingSecret) throws Exception {
+        if (remotePeerId == null || remotePeerId.isBlank()) {
+            throw new IllegalStateException("Peer identity exchange is required before key exchange");
+        }
+        byte[] first = localPeerId.compareTo(remotePeerId) < 0 ? outgoingSecret : incomingSecret;
+        byte[] second = localPeerId.compareTo(remotePeerId) < 0 ? incomingSecret : outgoingSecret;
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        digest.update("securep2p-v2:ml-kem-768:session".getBytes(StandardCharsets.UTF_8));
+        digest.update(first);
+        digest.update(second);
+        return digest.digest();
     }
 }
