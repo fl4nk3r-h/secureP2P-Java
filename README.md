@@ -39,6 +39,7 @@ Use `/help`, `/status`, `/clear`, or `/quit` in the chat. The simpler `server` a
 
 - [High-level architecture](docs/high-level-architecture.md): components, responsibilities, and end-to-end flows.
 - [Module-level design](docs/module-level-design.md): package boundaries, class diagrams, dependencies, state model, and message paths.
+- [Architecture and security decisions](docs/decisions.md): decisions taken, rationale, alternatives, consequences, and pending gates.
 - [Low-level design and API](docs/low-level-design.md): classes, state transitions, wire format, threading, and usage contracts.
 - [Security notes](docs/security.md): implemented protections, known weaknesses, threat boundaries, and hardening priorities.
 - [Development and testing](docs/development.md): project layout, Maven commands, test scope, and contribution guidance.
