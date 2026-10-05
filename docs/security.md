@@ -6,6 +6,8 @@ This is an educational protocol demonstration, not a secure messaging product. E
 
 The migration has started with tested `AeadCrypto` and `MlKemKeyExchange` primitives. These are not yet connected to `AsyncPeer`; the active peer protocol therefore remains the legacy unauthenticated DH/AES path described below. Do not interpret the new classes as proof that peer communication is already post-quantum or authenticated.
 
+The rationale and status of the migration choices are recorded in [Architecture and Security Decisions](decisions.md), including provider selection, ML-KEM parameter selection, AES-GCM usage, protocol compatibility, identity authentication, and the Double Ratchet security gate.
+
 ## Implemented protections
 
 - Java cryptographic providers supply DH, AES, SHA-256, and `SecureRandom` primitives.
