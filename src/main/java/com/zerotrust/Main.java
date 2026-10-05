@@ -28,12 +28,12 @@ public class Main {
      * Main entry point of the application.
      * <p>
      * Parses command-line arguments to determine the operational mode and
-    * initializes the interactive peer component.
+     * initializes the interactive peer component.
      * </p>
      * 
      * @param args Command-line arguments:
      *             <ul>
-    *             <li>args[0]: Mode ("peer" or "interactive")</li>
+     *             <li>args[0]: Mode ("peer" or "interactive")</li>
      *             <li>args[1+]: Additional mode-specific parameters</li>
      *             </ul>
      */
@@ -67,8 +67,8 @@ public class Main {
      * command-based
      * interface. The peer can either listen for incoming connections or connect to
      * another peer.
-    * Communications use the currently configured session implementation after
-    * key exchange.
+     * Communications use the currently configured session implementation after
+     * key exchange.
      * </p>
      * 
      * @param args Command-line arguments:
