@@ -1,588 +1,283 @@
 package com.zerotrust.network;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
-import java.net.ServerSocket;
-import java.net.Socket;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
-import javax.crypto.SecretKey;
-
-import com.zerotrust.crypto.CryptoUtils;
-import com.zerotrust.crypto.KeyExchange;
-
 /**
- * Asynchronous Peer-to-Peer Communication Implementation
- * 
- * Features:
- * - Non-blocking connection handling
- * - Callback-based message reception
- * - Thread pool for concurrent operations
- * - Message queue for buffering
- * - Event-driven architecture
- * 
- * Status: Stable
- * Location: com.zerotrust.network
- * 
- * @author fl4nk3r
- * @version 1.0
+ * Facade for peer connection, session, and inbound message delivery modules.
+ * <p>
+ * An {@code AsyncPeer} ties together a {@link PeerConnection} (TCP transport),
+ * a {@link SessionManager} (peer identity exchange and ML-KEM/AES-GCM session
+ * state), and a {@link MessageListener} (inbound message dispatch). All blocking
+ * operations are asynchronous with callback- or error-based completion.
+ * </p>
+ *
+ * @author fl4nk3r-h
+ * @version 2.0.0
+ * @see PeerConnection
+ * @see SessionManager
+ * @see MessageListener
  */
 public class AsyncPeer {
-    private String peerId;
-    private String remotePeerId;
-    private int port;
-    private ServerSocket serverSocket;
-    private Socket peerSocket;
-    private PrintWriter out;
-    private BufferedReader in;
-    private SecretKey encryptionKey;
-    private KeyExchange keyExchange;
-
-    // Thread management
-    private ExecutorService executorService;
-    private Thread listenerThread;
-    private volatile boolean running = false;
-
-    // Callbacks
-    private Consumer<AsyncPeer> onConnected;
-    private Consumer<String> onMessageReceived;
-    private Consumer<Exception> onError;
-    private Consumer<Boolean> onSendComplete;
-
-    // Message queue for async processing
-    private BlockingQueue<String> messageQueue;
+    private final String peerId;
+    private final int port;
+    private final ExecutorService executorService;
+    private final PeerConnection peerConnection;
+    private final SessionManager sessionManager;
+    private final MessageListener messageListener;
+    private final AtomicBoolean closed = new AtomicBoolean();
+    private volatile Consumer<Exception> onError;
+    private volatile Consumer<Boolean> onSendComplete;
 
     /**
-     * Creates an AsyncPeer that listens on the specified port.
-     * 
-     * @param peerId Unique identifier for this peer
-     * @param port   Port to listen on
-     * @throws Exception if initialization fails
+     * Creates a new peer and its supporting connection, session, and listener
+     * modules.
+     * <p>
+     * Binds the TCP listener to the given port and generates the local ML-KEM
+     * key pair.
+     * </p>
+     *
+     * @param peerId  Identifier of this peer, exchanged with the remote peer
+     * @param port    Local port to bind the server socket to
+     * @throws Exception if the socket or session initialization fails
      */
     public AsyncPeer(String peerId, int port) throws Exception {
         this.peerId = peerId;
         this.port = port;
-        this.keyExchange = new KeyExchange();
-        this.serverSocket = new ServerSocket(port);
         this.executorService = Executors.newFixedThreadPool(4);
-        this.messageQueue = new LinkedBlockingQueue<>();
-        System.out.println("AsyncPeer " + peerId + " created on port " + port);
+        this.peerConnection = new PeerConnection(port, executorService, this::handleError);
+        this.sessionManager = new SessionManager(peerId, peerConnection, executorService);
+        this.messageListener = new MessageListener(peerConnection, sessionManager, executorService);
+        this.messageListener.onError(this::handleError);
     }
 
     /**
-     * Exchanges peer identifiers over the active socket connection.
-     * <p>
-     * Both peers should call this method after connection establishment and before
-     * key exchange. It sends the local peerId and reads the remote peerId.
-     * </p>
+     * Asynchronously waits for an incoming connection.
      *
-     * @return The remote peer's identifier
-     * @throws IOException if I/O streams are not ready or exchange fails
-     */
-    public String exchangePeerId() throws IOException {
-        if (out == null || in == null) {
-            throw new IOException("I/O streams not initialized. Cannot exchange peerId.");
-        }
-
-        out.println("PEER_ID:" + peerId);
-        String line = in.readLine();
-
-        if (line == null || !line.startsWith("PEER_ID:")) {
-            throw new IOException("Invalid peerId exchange message: " + line);
-        }
-
-        remotePeerId = line.substring("PEER_ID:".length());
-        return remotePeerId;
-    }
-
-    /**
-     * The `acceptConnectionAsync` method asynchronously accepts incoming
-     * connections and executes a
-     * callback function upon successful connection.
-     * 
-     * @param callback The `callback` parameter in the `acceptConnectionAsync`
-     *                 method is a `Consumer`
-     *                 functional interface that accepts an `AsyncPeer` object as
-     *                 input. This callback function is
-     *                 executed asynchronously when a connection is accepted by the
-     *                 `AsyncPeer` instance.
+     * @param callback Invoked with this peer once the connection is accepted
      */
     public void acceptConnectionAsync(Consumer<AsyncPeer> callback) {
-        onConnected = callback;
-        executorService.execute(() -> {
-            try {
-                System.out.println("AsyncPeer " + peerId + " listening for connections...");
-                peerSocket = serverSocket.accept();
-                out = new PrintWriter(peerSocket.getOutputStream(), true);
-                in = new BufferedReader(new InputStreamReader(peerSocket.getInputStream()));
-
-                System.out.println("AsyncPeer " + peerId + " accepted connection from " +
-                        peerSocket.getInetAddress());
-
-                if (onConnected != null) {
-                    onConnected.accept(this);
-                }
-            } catch (IOException e) {
-                handleError(e);
+        peerConnection.acceptAsync(connection -> {
+            if (callback != null) {
+                callback.accept(this);
             }
         });
     }
 
     /**
-     * The `connectToPeerAsync` method establishes an asynchronous connection to a
-     * peer using the
-     * provided address and port, invoking a callback upon successful connection or
-     * handling any
-     * encountered IOException.
-     * 
-     * @param address  The `address` parameter in the `connectToPeerAsync` method
-     *                 represents the IP
-     *                 address or hostname of the peer to which the asynchronous
-     *                 connection will be established. This
-     *                 is the network location where the peer is listening for
-     *                 incoming connections.
-     * @param port     The `port` parameter in the `connectToPeerAsync` method
-     *                 represents the port number
-     *                 on which the peer will attempt to connect to the specified
-     *                 address. Ports are used to uniquely
-     *                 identify different network services running on the same host.
-     *                 Common port numbers include 80 for
-     *                 HTTP, 443 for HTTPS,
-     * @param callback The `callback` parameter in the `connectToPeerAsync` method
-     *                 is a `Consumer`
-     *                 functional interface that accepts an `AsyncPeer` object as an
-     *                 argument. This callback function
-     *                 is invoked once the asynchronous connection to the peer is
-     *                 established successfully.
+     * Asynchronously connects to a remote peer.
+     *
+     * @param address   Host name or address of the remote peer
+     * @param port      Port of the remote peer
+     * @param callback  Invoked with this peer once the connection is established
      */
     public void connectToPeerAsync(String address, int port, Consumer<AsyncPeer> callback) {
-        onConnected = callback;
-        executorService.execute(() -> {
-            try {
-                System.out.println("AsyncPeer " + peerId + " connecting to " + address + ":" + port);
-                peerSocket = new Socket(address, port);
-                out = new PrintWriter(peerSocket.getOutputStream(), true);
-                in = new BufferedReader(new InputStreamReader(peerSocket.getInputStream()));
-
-                System.out.println("AsyncPeer " + peerId + " connected to " + address + ":" + port);
-
-                if (onConnected != null) {
-                    onConnected.accept(this);
-                }
-            } catch (IOException e) {
-                handleError(e);
+        peerConnection.connectAsync(address, port, connection -> {
+            if (callback != null) {
+                callback.accept(this);
             }
         });
     }
 
     /**
-     * The `performKeyExchangeAsync` method asynchronously performs a key exchange
-     * process with a peer,
-     * computes a shared secret, sets up encryption key, starts message listening,
-     * and executes a
-     * callback upon completion or error.
-     * 
-     * @param onComplete The `onComplete` parameter in the `performKeyExchangeAsync`
-     *                   method is a
-     *                   `Runnable` object that represents a block of code that can
-     *                   be executed after the key exchange
-     *                   process is completed asynchronously. It allows you to
-     *                   specify additional actions or tasks to be
-     *                   performed once the key exchange is finished. In
+     * Exchanges peer identifiers with the remote peer using a blocking
+     * {@code PEER_ID:} handshake.
+     *
+     * @return The remote peer's identifier
+     * @throws IOException if the connection is not ready or the handshake frame
+     *                     is invalid
+     */
+    public String exchangePeerId() throws IOException {
+        return sessionManager.exchangePeerId();
+    }
+
+    /**
+     * Performs the asynchronous ML-KEM key exchange and starts the message
+     * listener on success.
+     *
+     * @param onComplete Invoked on the executor after the session key is
+     *                  established and the listener has started
      */
     public void performKeyExchangeAsync(Runnable onComplete) {
-        executorService.execute(() -> {
-            try {
-                System.out.println("AsyncPeer " + peerId + " starting key exchange...");
-
-                // Send public key
-                String myPublicKey = keyExchange.getPublicKeyString();
-                out.println(myPublicKey);
-
-                // Receive public key
-                String peerPublicKey = in.readLine();
-
-                // Compute shared secret
-                String sharedSecret = keyExchange.getSharedSecretString(peerPublicKey);
-
-                // Derive AES key from shared secret using SHA-256
-                // No need to check length or take substring - SHA-256 handles any input
-                encryptionKey = CryptoUtils.getKeyFromString(sharedSecret);
-
-                System.out.println("AsyncPeer " + peerId + " key exchange completed");
-
-                // Start listening for messages in background
-                startMessageListener();
-
-                if (onComplete != null) {
-                    onComplete.run();
-                }
-            } catch (Exception e) {
-                handleError(e);
+        sessionManager.performKeyExchangeAsync(() -> {
+            messageListener.start();
+            if (onComplete != null) {
+                onComplete.run();
             }
-        });
+        }, this::handleError);
     }
 
     /**
-     * The `onMessageReceived` function sets a callback for when a message is
-     * received.
-     * 
-     * @param callback The `callback` parameter in the `onMessageReceived` method is
-     *                 a `Consumer`
-     *                 functional interface that takes a `String` as input. This
-     *                 parameter is used to set a callback
-     *                 function that will be called when a message is received.
+     * Registers a callback for decrypted incoming messages.
+     *
+     * @param callback Invoked with each decrypted message payload
      */
     public void onMessageReceived(Consumer<String> callback) {
-        this.onMessageReceived = callback;
+        messageListener.onMessageReceived(callback);
     }
 
     /**
-     * The `onError` function in Java sets a callback function to handle exceptions.
-     * 
-     * @param callback The `callback` parameter in the `onError` method is a
-     *                 `Consumer` functional
-     *                 interface that takes an `Exception` as input. This parameter
-     *                 allows you to specify a callback
-     *                 function that will be executed when an error occurs.
+     * Registers a callback for asynchronous errors from the connection or
+     * message listener.
+     *
+     * @param callback Invoked with the first failure that occurs
      */
     public void onError(Consumer<Exception> callback) {
         this.onError = callback;
+        messageListener.onError(this::handleError);
     }
 
     /**
-     * The `onSendComplete` function in Java sets a callback function to be executed
-     * when a send
-     * operation is complete.
-     * 
-     * @param callback The `callback` parameter in the `onSendComplete` method is a
-     *                 `Consumer`
-     *                 functional interface that takes a `Boolean` as input. This
-     *                 callback function will be invoked
-     *                 when the sending operation is complete.
+     * Registers a callback reporting send success for
+     * {@link #sendMessageAsync(String)}.
+     *
+     * @param callback Invoked with {@code true} on success, {@code false} on
+     *                 failure
      */
     public void onSendComplete(Consumer<Boolean> callback) {
         this.onSendComplete = callback;
     }
 
     /**
-     * The function `sendMessageAsync` sends a message asynchronously with an
-     * optional callback.
-     * 
-     * @param message The `message` parameter in the `sendMessageAsync` method is a
-     *                string that
-     *                represents the message you want to send asynchronously.
+     * Asynchronously sends a message using the registered send-complete
+     * callback.
+     *
+     * @param message Plaintext message to send; must not be sent before the
+     *                session is established
      */
     public void sendMessageAsync(String message) {
-        sendMessageAsync(message, null);
+        sendMessageAsync(message, onSendComplete);
     }
 
     /**
-     * The `sendMessageAsync` method sends a message asynchronously, encrypting it
-     * if an encryption key
-     * is provided, and invokes a callback with a boolean parameter indicating
-     * success or failure.
-     * 
-     * @param message  The `message` parameter in the `sendMessageAsync` method is
-     *                 the text message that
-     *                 you want to send asynchronously. This message will be
-     *                 processed, encrypted (if an encryption key
-     *                 is provided), and then sent to the output stream.
-     * @param callback The `callback` parameter in the `sendMessageAsync` method is
-     *                 a
-     *                 `Consumer<Boolean>` functional interface. This parameter
-     *                 allows you to pass a callback function
-     *                 that accepts a `Boolean` value. The callback function will be
-     *                 executed after the message is sent
-     *                 asynchronously. If the message is sent successfully, the
-     *                 callback
+     * Asynchronously encrypts and sends a message.
+     *
+     * @param message   Plaintext message to send
+     * @param callback  Invoked with {@code true} on success, {@code false} on
+     *                  failure
      */
     public void sendMessageAsync(String message, Consumer<Boolean> callback) {
-        executorService.execute(() -> {
-            try {
-                String toSend = message;
-                if (encryptionKey != null) {
-                    toSend = CryptoUtils.encrypt(message, encryptionKey);
-                }
-
-                out.println(toSend);
-                System.out.println("AsyncPeer " + peerId + " sent message: " +
-                        (message.length() > 20 ? message.substring(0, 20) + "..." : message));
-
-                if (callback != null) {
-                    callback.accept(true);
-                }
-            } catch (Exception e) {
-                handleError(e);
-                if (callback != null) {
-                    callback.accept(false);
-                }
-            }
-        });
+        sessionManager.sendMessageAsync(message, callback);
     }
 
     /**
-     * The `pollMessage` function retrieves and removes the head of the message
-     * queue, waiting up to
-     * the specified timeout for an element to become available.
-     * 
-     * @param timeout The `timeout` parameter specifies the maximum time to wait for
-     *                a message to be
-     *                available in the message queue before returning `null`.
-     * @param unit    The `unit` parameter in the `pollMessage` method specifies the
-     *                time unit for the
-     *                timeout value. It is used to indicate the unit of time for the
-     *                timeout duration, such as
-     *                seconds, milliseconds, minutes, etc. This allows you to
-     *                specify the timeout duration in a
-     *                specific time unit that is
-     * @return The method `pollMessage` returns a message from the message queue
-     *         with the specified
-     *         timeout and time unit.
+     * Waits up to the given timeout for a queued incoming message.
+     *
+     * @param timeout Maximum time to wait
+     * @param unit    Time unit of the timeout argument
+     * @return The next queued message, or {@code null} if the timeout expires
+     * @throws InterruptedException if interrupted while waiting
      */
     public String pollMessage(long timeout, TimeUnit unit) throws InterruptedException {
-        return messageQueue.poll(timeout, unit);
+        return messageListener.pollMessage(timeout, unit);
     }
 
     /**
-     * The `pollMessage` function returns and removes the first message from a
-     * message queue.
-     * 
-     * @return The `pollMessage` method is returning the message at the front of the
-     *         message queue.
+     * Returns the next queued incoming message without waiting.
+     *
+     * @return The next queued message, or {@code null} if the queue is empty
      */
     public String pollMessage() {
-        return messageQueue.poll();
+        return messageListener.pollMessage();
     }
 
     /**
-     * The `isConnected` function in Java checks if a peer socket is not null and is
-     * connected.
-     * 
-     * @return The method `isConnected()` returns a boolean value indicating whether
-     *         the `peerSocket`
-     *         is not null and is connected.
+     * @return {@code true} if the underlying socket is connected and open
      */
     public boolean isConnected() {
-        return peerSocket != null && peerSocket.isConnected();
+        return peerConnection.isConnected();
     }
 
     /**
-     * The function `isEncrypted()` returns true if an encryption key is set,
-     * indicating that the data
-     * is encrypted.
-     * 
-     * @return The method isEncrypted() is returning a boolean value indicating
-     *         whether the
-     *         encryptionKey is not null. If the encryptionKey is not null, the
-     *         method will return true,
-     *         indicating that the data is encrypted. If the encryptionKey is null,
-     *         the method will return
-     *         false, indicating that the data is not encrypted.
+     * Waits up to the given timeout for the connection to become fully ready
+     * (socket plus streams initialized).
+     *
+     * @param timeoutMillis Maximum time in milliseconds to wait
+     * @return {@code true} if the connection became ready in time
+     * @throws InterruptedException if interrupted while waiting
+     */
+    public boolean waitForConnectionReady(long timeoutMillis) throws InterruptedException {
+        return peerConnection.waitUntilReady(timeoutMillis);
+    }
+
+    /**
+     * @return {@code true} if the key exchange completed and an AES session key
+     *         is established
      */
     public boolean isEncrypted() {
-        return encryptionKey != null;
+        return sessionManager.isEncrypted();
     }
 
     /**
-     * The close method shuts down various resources and services associated with an
-     * AsyncPeer instance
-     * in Java. Gracefully drains executor service before closing I/O streams.
+     * Closes the connection, listener, and session, then shuts down the peer's
+     * executor.
+     * <p>
+     * Idempotent: subsequent calls are ignored.
+     * </p>
      */
     public void close() {
-        running = false;
-
-        // Close I/O streams to unblock listener thread
-        try {
-            if (peerSocket != null && !peerSocket.isClosed())
-                peerSocket.close();
-            if (serverSocket != null && !serverSocket.isClosed())
-                serverSocket.close();
-        } catch (IOException e) {
-            // Socket already closed
+        if (!closed.compareAndSet(false, true)) {
+            return;
         }
-
-        // Wait for listener thread to finish (it will exit on closed socket)
-        try {
-            if (listenerThread != null && listenerThread.isAlive()) {
-                listenerThread.join(2000); // Wait up to 2 seconds
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-
-        // Close buffered streams after listener exits
-        try {
-            if (in != null)
-                in.close();
-            if (out != null)
-                out.close();
-        } catch (IOException e) {
-            // Already closed
-        }
-
-        // Shutdown executor service and wait for pending tasks to complete
+        peerConnection.close();
+        messageListener.close();
+        sessionManager.close();
         executorService.shutdown();
         try {
             if (!executorService.awaitTermination(5, TimeUnit.SECONDS)) {
                 executorService.shutdownNow();
             }
-        } catch (InterruptedException e) {
+        } catch (InterruptedException interruptedException) {
             executorService.shutdownNow();
+            Thread.currentThread().interrupt();
         }
-
-        System.out.println("AsyncPeer " + peerId + " closed");
     }
 
     /**
-     * The function `getPeerId()` returns the peer ID as a String.
-     * 
-     * @return The `peerId` variable is being returned.
+     * @return The identifier of this peer
      */
     public String getPeerId() {
         return peerId;
     }
 
     /**
-     * Returns the remote peer's identifier after a successful exchange.
-     *
-     * @return The remote peerId, or null if not exchanged yet
+     * @return The remote peer's identifier, or {@code null} before the identity
+     *         exchange completes
      */
     public String getRemotePeerId() {
-        return remotePeerId;
+        return sessionManager.getRemotePeerId();
     }
 
     /**
-     * The function `getPort()` returns the port number.
-     * 
-     * @return The `port` variable is being returned.
+     * @return The local port this peer is bound to
      */
     public int getPort() {
         return port;
     }
 
     /**
-     * The function `getQueueSize` returns the size of the message queue.
-     * 
-     * @return The method `getQueueSize` returns the size of the message queue.
+     * @return The number of buffered incoming messages waiting in the queue
      */
     public int getQueueSize() {
-        return messageQueue.size();
+        return messageListener.getQueueSize();
     }
 
     /**
-     * The `startMessageListener` method creates a new thread to listen for incoming
-     * messages,
-     * processes them asynchronously, and handles any errors that occur.
+     * Routes an internal error to the registered error callback, or to
+     * {@code System.err} when no callback is registered.
+     *
+     * @param exception The error that occurred
      */
-    private void startMessageListener() {
-        if (running)
-            return;
-        running = true;
-
-        listenerThread = new Thread(() -> {
-            System.out.println("AsyncPeer " + peerId + " message listener started");
-            try {
-                String line;
-                while (running && (line = in.readLine()) != null) {
-                    messageQueue.put(line);
-                    processMessageAsync(line);
-                }
-            } catch (IOException | InterruptedException e) {
-                if (running) {
-                    handleError(e);
-                }
-            }
-        });
-        listenerThread.setDaemon(true);
-        listenerThread.start();
-    }
-
-    /**
-     * The `processMessageAsync` method asynchronously decrypts an encrypted message
-     * using a specified
-     * encryption key and then invokes a callback function with the decrypted
-     * message.
-     * 
-     * @param encryptedMessage The `processMessageAsync` method is designed to
-     *                         asynchronously process
-     *                         an encrypted message. The method uses an
-     *                         `executorService` to execute the processing logic in
-     *                         a
-     *                         separate thread. Here's a breakdown of the steps
-     *                         performed in the method:
-     */
-    private void processMessageAsync(String encryptedMessage) {
-        executorService.execute(() -> {
-            try {
-                String decrypted = encryptedMessage;
-                if (encryptionKey != null) {
-                    decrypted = CryptoUtils.decrypt(encryptedMessage, encryptionKey);
-                }
-
-                if (onMessageReceived != null) {
-                    onMessageReceived.accept(decrypted);
-                }
-            } catch (Exception e) {
-                handleError(e);
-            }
-        });
-    }
-
-    /**
-     * Waits for the connection to be ready (I/O streams initialized) with a
-     * timeout.
-     * <p>
-     * This method polls the connection state to ensure that both input and output
-     * streams are properly initialized before proceeding with operations like key
-     * exchange. This prevents race conditions when using asynchronous connection
-     * methods.
-     * </p>
-     * 
-     * @param timeoutMillis Maximum time to wait in milliseconds
-     * @return true if connection is ready, false if timeout occurred
-     * @throws InterruptedException if the waiting thread is interrupted
-     */
-    public boolean waitForConnectionReady(long timeoutMillis) throws InterruptedException {
-        long startTime = System.currentTimeMillis();
-        long elapsed = 0;
-
-        while (elapsed < timeoutMillis) {
-            // Check if both I/O streams are initialized
-            if (out != null && in != null && peerSocket != null && peerSocket.isConnected()) {
-                return true;
-            }
-
-            // Wait a bit before checking again
-            Thread.sleep(50);
-            elapsed = System.currentTimeMillis() - startTime;
-        }
-
-        return false;
-    }
-
-    /**
-     * The handleError function logs an error message, prints the stack trace, and
-     * invokes a consumer
-     * function if it is not null.
-     * 
-     * @param e The parameter "e" in the handleError method is an Exception object,
-     *          which represents an
-     *          error or exceptional condition that has occurred during the
-     *          execution of the code.
-     */
-    private void handleError(Exception e) {
-        System.err.println("AsyncPeer " + peerId + " error: " + e.getMessage());
-        e.printStackTrace();
-        if (onError != null) {
-            onError.accept(e);
+    private void handleError(Exception exception) {
+        Consumer<Exception> callback = onError;
+        if (callback != null) {
+            callback.accept(exception);
+        } else {
+            System.err.println("AsyncPeer " + peerId + " error: " + exception.getMessage());
         }
     }
 }

@@ -2,57 +2,57 @@
 
 ## Security status
 
-This is an educational protocol demonstration, not a secure messaging product. Encryption is present, but confidentiality alone does not provide an authenticated or tamper-resistant channel.
+The active peer protocol uses an ML-KEM-768 bootstrap and AES-256-GCM through `SessionManager`. This provides a post-quantum KEM primitive and authenticated encryption for message payloads. The older DH/AES implementation is archived under `com.zerotrust.legacy` and is not wired into active code.
+
+The rationale and status of the migration choices are recorded in [Architecture and Security Decisions](decisions.md), including provider selection, ML-KEM parameter selection, AES-GCM usage, protocol compatibility, identity authentication, and the Double Ratchet security gate.
 
 ## Implemented protections
 
-- Java cryptographic providers supply DH, AES, SHA-256, and `SecureRandom` primitives.
-- Each `KeyExchange` instance creates a fresh DH key pair.
-- Peer messages are normally encrypted after the asynchronous handshake completes.
-- Public keys and ciphertext are Base64-encoded for transport over line-oriented streams.
+- Bouncy Castle supplies ML-KEM-768 key generation, encapsulation, and decapsulation.
+- Peer messages use AES-256-GCM with random 12-byte nonces and 128-bit tags.
+- Protocol metadata is supplied as authenticated associated data for message encryption.
+- Session sends are rejected until the PQC bootstrap completes.
+- Public keys, KEM ciphertexts, and encrypted payloads are Base64-encoded for line transport.
 
-## Important limitations
+## Current protocol boundaries
 
-### No peer authentication
+### Peer identity binding
 
-The DH exchange has no certificate, fingerprint, pre-shared key, or authenticated public-key check. An active network attacker can replace both public keys and establish separate sessions with each endpoint. The exchanged peer ID is only a string and is not proof of identity.
+Peer IDs are exchanged as protocol metadata. The roadmap adds pinned identity keys or signatures so a peer can bind a displayed identity to the key material used in the ML-KEM handshake.
 
-### No ciphertext authentication
+### Session-level replay handling
 
-The default `AES` transformation does not provide an authentication tag. An attacker can modify, replay, reorder, or inject lines; decryption errors may be reported, but there is no protocol-level authenticity or replay protection.
+AES-GCM authenticates each encrypted payload. The roadmap adds session counters, replay caches, authenticated headers, and ratchet state so the session layer can enforce ordering and replay policy across messages.
 
-### Weak and implicit cryptographic choices
+### Cryptographic migration notes
 
-The implementation uses 1024-bit finite-field DH and leaves the AES mode and padding implicit in `Cipher.getInstance("AES")`. The key derivation is a direct SHA-256 hash of a textual shared-secret representation, without domain separation or a standard KDF such as HKDF.
+The archived implementation used finite-field DH and a provider-default AES transformation. The active ML-KEM bootstrap derives session material from ordered KEM secrets with a protocol context. A reviewed KDF and authenticated transcript binding are part of the next session-design milestone.
 
-### Ordering and plaintext hazards
+### Handshake sequencing
 
-`sendMessageAsync` sends plaintext if called before `encryptionKey` is initialized. `performKeyExchangeAsync` is asynchronous and returns immediately, so application code must wait for completion. The CLI currently prints completion immediately after scheduling the exchange.
+`SessionManager` rejects `sendMessageAsync` before the PQC session key is initialized. `performKeyExchangeAsync` is still asynchronous and returns immediately, so application code must wait for completion. The CLI currently prints completion immediately after scheduling the exchange.
 
-### Metadata and operational exposure
+### Runtime metadata
 
-Peer IDs, addresses, connection events, truncated message previews, and exceptions are printed to standard output/error. The line protocol has no message-size limit, rate limit, timeout policy, or resource quota.
+Peer IDs, addresses, connection events, truncated message previews, and exceptions are printed to standard output/error. Message-size limits, rate limits, timeout policy, and resource quotas are tracked as transport-hardening work.
 
-## Threat model
+## Operating model
 
-The current implementation may be acceptable for local demonstrations where both endpoints and the network are trusted. It does not protect against:
+The current implementation is designed for local and controlled-network peer sessions while the authenticated v2 protocol work continues. Priority scenarios for the hardening roadmap include:
 
-- A man-in-the-middle attacker.
-- A malicious or compromised peer.
-- A passive observer learning traffic metadata.
-- Active ciphertext tampering or replay.
+- Peer identity verification.
+- Malicious or compromised peer behavior.
+- Traffic metadata exposure.
+- Ciphertext replay and ordering policy.
 - Resource exhaustion through connections or oversized lines.
 
 ## Hardening priorities
 
-Before treating this as a real secure channel:
-
-1. Prefer TLS 1.3 with certificate or public-key pinning, or define an authenticated protocol using a vetted library.
-2. If retaining application-level encryption, use an AEAD mode such as AES-GCM or ChaCha20-Poly1305 with a unique nonce per message and authenticated framing.
-3. Replace 1024-bit finite-field DH with a modern authenticated key agreement and an explicit key schedule.
-4. Add peer authentication, transcript binding, protocol versioning, sequence numbers, replay handling, and message-size limits.
-5. Enforce a state machine that rejects sends until the authenticated session is ready.
-6. Use explicit UTF-8 encoding everywhere and avoid logging message content or sensitive handshake material.
-7. Add negative tests for tampering, replay, malformed frames, handshake races, connection timeouts, and authentication failures.
+1. Add pinned identity keys and authenticated transcript signatures; ML-KEM alone does not prevent MITM attacks.
+2. Replace the current hash-based session derivation with a reviewed KDF and bind all handshake capabilities and identities.
+3. Implement a reviewed Double Ratchet with sequence numbers, replay handling, skipped-key limits, and out-of-order delivery.
+4. Add structured versioned framing, downgrade rejection, message-size limits, timeouts, and resource quotas.
+5. Use explicit UTF-8 encoding everywhere and avoid logging message content or sensitive handshake material.
+6. Add negative tests for identity failure, tampering, replay, malformed frames, handshake races, connection timeouts, and ratchet failures.
 
 Changes to cryptographic primitives should be reviewed as security-sensitive changes and accompanied by tests that prove both sides derive the same key and reject invalid input.

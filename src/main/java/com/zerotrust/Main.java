@@ -1,31 +1,30 @@
 package com.zerotrust;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 import com.zerotrust.network.AsyncPeer;
-import com.zerotrust.network.Client;
-import com.zerotrust.network.Server;
 
 /**
  * Main entry point for the Secure P2P Communication System.
  * <p>
- * This application provides three operational modes:
- * <ul>
- * <li><b>Server Mode:</b> Starts a server that listens for incoming
- * connections</li>
- * <li><b>Client Mode:</b> Connects to a server and sends/receives messages</li>
- * <li><b>Interactive Peer Mode:</b> Enables bidirectional P2P chat with
- * encryption</li>
- * </ul>
+ * This application provides interactive peer-to-peer chat mode.
  * </p>
  * 
- * @author fl4nk3r
- * @version 1.0
+ * @author fl4nk3r-h
+ * @version 2.0.0
+ * @see AsyncPeer
  */
 public class Main {
+
+    private static final long CONNECTION_TIMEOUT_MILLIS = 15000;
+    private static final long KEY_EXCHANGE_TIMEOUT_MILLIS = 15000;
 
     /**
      * Flag to control the running state of the interactive chat.
@@ -37,13 +36,12 @@ public class Main {
      * Main entry point of the application.
      * <p>
      * Parses command-line arguments to determine the operational mode and
-     * initializes the appropriate component (Server, Client, or Interactive Peer).
+     * initializes the interactive peer component.
      * </p>
      * 
      * @param args Command-line arguments:
      *             <ul>
-     *             <li>args[0]: Mode ("server", "client", "peer", or
-     *             "interactive")</li>
+     *             <li>args[0]: Mode ("peer" or "interactive")</li>
      *             <li>args[1+]: Additional mode-specific parameters</li>
      *             </ul>
      */
@@ -52,21 +50,7 @@ public class Main {
             if (args.length > 0) {
                 String mode = args[0];
 
-                if (mode.equals("server")) {
-                    System.out.println("Starting Secure P2P Server...");
-                    Server server = new Server(12345);
-                    server.start();
-                    server.close();
-
-                } else if (mode.equals("client")) {
-                    System.out.println("Starting Secure P2P Client...");
-                    Client client = new Client("localhost", 12345);
-                    client.sendMessage("Hello from Secure P2P Client!");
-                    String response = client.receiveMessage();
-                    System.out.println("Response: " + response);
-                    client.close();
-
-                } else if (mode.equals("peer") || mode.equals("interactive")) {
+                if (mode.equals("peer") || mode.equals("interactive")) {
                     startInteractivePeerMode(args);
 
                 } else {
@@ -91,7 +75,7 @@ public class Main {
      * command-based
      * interface. The peer can either listen for incoming connections or connect to
      * another peer.
-     * All communications are encrypted using quantum-safe AES-256 encryption after
+     * Communications use the currently configured session implementation after
      * key exchange.
      * </p>
      * 
@@ -115,42 +99,32 @@ public class Main {
 
         // Display welcome banner
         System.out.println("\n╔════════════════════════════════════════╗");
-        System.out.println("║ Secure P2P Interactive Chat System  ║");
+        System.out.println("║ Secure P2P Interactive Chat System     ║");
         System.out.println("╚════════════════════════════════════════╝\n");
 
         AsyncPeer peer = new AsyncPeer(peerName, port);
-        System.out.println("✓ AsyncPeer: " + peerName + " initialized on port " + port);
+        System.out.println(" AsyncPeer: " + peerName + " initialized on port " + port);
 
         try {
+            AtomicReference<Exception> asyncFailure = new AtomicReference<>();
+
             if (mode.equals("listen")) {
                 // Listening mode: wait for incoming connection
-                System.out.println("📡 Listening for incoming connections on port " + port + "...");
-                peer.acceptConnectionAsync(new Consumer<AsyncPeer>() {
-                    @Override
-                    public void accept(AsyncPeer p) {
-                        // Connection accepted callback (currently empty)
-                    }
-                });
-                System.out.println("✓ Connection accepted!");
-
-                // Wait for connection to be ready (I/O streams initialized)
-                System.out.println("⏳ Waiting for connection to be ready...");
-                if (!peer.waitForConnectionReady(5000)) {
-                    throw new RuntimeException("Connection failed to initialize within timeout period");
-                }
-                System.out.println("✓ Connection ready!");
+                System.out.println(" Listening for incoming connections on port " + port + "...");
+                awaitConnection(peer, asyncFailure, true, null, 0);
+                System.out.println(" Connection accepted and ready!");
 
                 // Exchange peer identifiers
-                System.out.println("🔄 Exchanging peer identifiers...");
+                System.out.println(" Exchanging peer identifiers...");
                 String remotePeerId = peer.exchangePeerId();
-                System.out.println("✓ Remote peer identified: " + remotePeerId);
+                System.out.println(" Remote peer identified: " + remotePeerId);
+
+                registerMessageDisplay(peer, peerName, remotePeerId);
 
                 // Perform secure key exchange
-                System.out.println("🔐 Performing key exchange...");
-                peer.performKeyExchangeAsync(() -> {
-                    // Key exchange completed callback (currently empty)
-                });
-                System.out.println("✓ Key exchange completed!\n");
+                System.out.println(" Performing key exchange...");
+                awaitKeyExchange(peer, asyncFailure);
+                System.out.println(" Key exchange completed!\n");
 
                 // Start interactive chat session
                 startInteractiveChat(peer, peerName, remotePeerId, true);
@@ -160,39 +134,125 @@ public class Main {
                 String remoteHost = args.length > 4 ? args[4] : "localhost";
                 int remotePort = args.length > 5 ? Integer.parseInt(args[5]) : 9000;
 
-                System.out.println("🔗 Connecting to " + remoteHost + ":" + remotePort + "...");
-                peer.connectToPeerAsync(remoteHost, remotePort, null);
-                System.out.println("✓ Connected!");
-
-                // Wait for connection to be ready (I/O streams initialized)
-                System.out.println("⏳ Waiting for connection to be ready...");
-                if (!peer.waitForConnectionReady(15000)) {
-                    throw new RuntimeException("Connection failed to initialize within timeout period");
-                }
-                System.out.println("✓ Connection ready!");
+                System.out.println(" Connecting to " + remoteHost + ":" + remotePort + "...");
+                awaitConnection(peer, asyncFailure, false, remoteHost, remotePort);
+                System.out.println(" Connected and ready!");
 
                 // Exchange peer identifiers
-                System.out.println("🔄 Exchanging peer identifiers...");
+                System.out.println(" Exchanging peer identifiers...");
                 String remotePeerId = peer.exchangePeerId();
-                System.out.println("✓ Remote peer identified: " + remotePeerId);
+                System.out.println(" Remote peer identified: " + remotePeerId);
+
+                registerMessageDisplay(peer, peerName, remotePeerId);
 
                 // Perform secure key exchange
-                System.out.println("🔐 Performing key exchange...");
-                peer.performKeyExchangeAsync(() -> {
-                    // Key exchange completed callback (currently empty)
-                });
-                System.out.println("✓ Key exchange completed!\n");
+                System.out.println(" Performing key exchange...");
+                awaitKeyExchange(peer, asyncFailure);
+                System.out.println(" Key exchange completed!\n");
 
                 // Start interactive chat session
                 startInteractiveChat(peer, peerName, remotePeerId, true);
             } else {
-                System.out.println("Invalid mode. Use 'listen' or 'connect'");
+                System.out.println(" Invalid mode. Use 'listen' or 'connect'");
             }
 
         } finally {
             peer.close();
-            System.out.println("\n✓ Connection closed.");
+            System.out.println("\n Connection closed.");
         }
+    }
+
+    /**
+     * Blocks until the peer has either accepted an incoming connection or
+     * established an outgoing one.
+     * <p>
+     * Wires an error callback into the peer so failures surface through
+     * {@code asyncFailure} and the waiting latch is released on both success and
+     * error paths.
+     * </p>
+     *
+     * @param peer          The peer used to perform the connection
+     * @param asyncFailure  Holder receiving the first asynchronous error, if any
+     * @param listener      True to wait for an incoming connection, false to
+     *                      connect to a remote peer
+     * @param remoteHost    Remote host for connect mode, ignored in listen mode
+     * @param remotePort    Remote port for connect mode, ignored in listen mode
+     * @throws Exception if the connection fails or does not complete within the
+     *                  configured timeout
+     */
+    private static void awaitConnection(AsyncPeer peer, AtomicReference<Exception> asyncFailure,
+            boolean listener, String remoteHost, int remotePort) throws Exception {
+        CountDownLatch connected = new CountDownLatch(1);
+        peer.onError(exception -> {
+            asyncFailure.compareAndSet(null, exception);
+            connected.countDown();
+        });
+        Consumer<AsyncPeer> callback = ignored -> connected.countDown();
+        if (listener) {
+            peer.acceptConnectionAsync(callback);
+        } else {
+            peer.connectToPeerAsync(remoteHost, remotePort, callback);
+        }
+
+        if (!connected.await(CONNECTION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
+            Exception failure = asyncFailure.get();
+            if (failure != null) {
+                throw new IOException("Connection failed: " + failure.getMessage(), failure);
+            }
+            throw new IOException("Connection failed to initialize within timeout period");
+        }
+        Exception failure = asyncFailure.get();
+        if (failure != null) {
+            throw new IOException("Connection failed: " + failure.getMessage(), failure);
+        }
+    }
+
+    /**
+     * Blocks until the asynchronous ML-KEM key exchange has completed.
+     *
+     * @param peer          The peer performing the key exchange
+     * @param asyncFailure  Holder receiving the first asynchronous error, if any
+     * @throws Exception if the key exchange fails or exceeds the configured
+     *                  timeout
+     */
+    private static void awaitKeyExchange(AsyncPeer peer, AtomicReference<Exception> asyncFailure) throws Exception {
+        CountDownLatch completed = new CountDownLatch(1);
+        peer.onError(exception -> {
+            asyncFailure.compareAndSet(null, exception);
+            completed.countDown();
+        });
+        peer.performKeyExchangeAsync(completed::countDown);
+        if (!completed.await(KEY_EXCHANGE_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
+            Exception failure = asyncFailure.get();
+            if (failure != null) {
+                throw new IOException("Key exchange failed: " + failure.getMessage(), failure);
+            }
+            throw new IOException("Key exchange did not complete within timeout period");
+        }
+        Exception failure = asyncFailure.get();
+        if (failure != null) {
+            throw new IOException("Key exchange failed: " + failure.getMessage(), failure);
+        }
+    }
+
+    /**
+     * Registers a console display handler for incoming messages.
+     * <p>
+     * Each received message is printed with the remote peer's display name, and
+     * the local prompt is re-issued afterwards.
+     * </p>
+     *
+     * @param peer          The peer whose received messages are displayed
+     * @param peerName      The local peer's display name
+     * @param remotePeerId  The remote peer's identifier
+     */
+    private static void registerMessageDisplay(AsyncPeer peer, String peerName, String remotePeerId) {
+        String localDisplayName = (peerName != null && !peerName.isBlank()) ? peerName : peer.getPeerId();
+        String remoteDisplayName = (remotePeerId != null && !remotePeerId.isBlank()) ? remotePeerId : "Remote";
+        peer.onMessageReceived(message -> {
+            System.out.println("\n " + remoteDisplayName + ": " + message);
+            System.out.print(localDisplayName + "> ");
+        });
     }
 
     /**
@@ -221,35 +281,9 @@ public class Main {
         String localDisplayName = (peerName != null && !peerName.isBlank()) ? peerName : peer.getPeerId();
         String remoteDisplayName = (remotePeerId != null && !remotePeerId.isBlank()) ? remotePeerId : "Remote";
 
-        // Start receive thread
-        Thread receiveThread = new Thread(() -> {
-            try {
-                while (isRunning.get()) {
-                    try {
-                        String message = peer.pollMessage();
-                        if (message != null && !message.isEmpty()) {
-                            System.out.println("\n📨 " + remoteDisplayName + ": " + message);
-                            System.out.print(localDisplayName + "> ");
-                        }
-                    } catch (Exception e) {
-                        if (isRunning.get()) {
-                            System.out.println("\n⚠️ Error receiving message: " + e.getMessage());
-                        }
-                        break;
-                    }
-                }
-            } catch (Exception e) {
-                if (isRunning.get()) {
-                    System.err.println("Receive thread error: " + e.getMessage());
-                }
-            }
-        }, "ReceiveThread");
-        receiveThread.setDaemon(true);
-        receiveThread.start();
-
         // Main send thread
         BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
-        System.out.println("💬 Type messages to send (commands: /help, /quit):\n");
+        System.out.println(" Type messages to send (commands: /help, /quit):\n");
         System.out.print(localDisplayName + "> ");
 
         try {
@@ -270,7 +304,7 @@ public class Main {
                         peer.sendMessageAsync(input);
                         System.out.print(localDisplayName + "> ");
                     } catch (Exception e) {
-                        System.out.println("❌ Error sending message: " + e.getMessage());
+                        System.out.println(" Error sending message: " + e.getMessage());
                         System.out.print(localDisplayName + "> ");
                     }
                 } else {
@@ -280,8 +314,6 @@ public class Main {
         } finally {
             isRunning.set(false);
             reader.close();
-            // Give receive thread time to exit
-            Thread.sleep(100);
         }
     }
 
@@ -306,16 +338,18 @@ public class Main {
     private static void handleCommand(String command, String peerName, String remotePeerId) {
         switch (command.toLowerCase()) {
             case "/quit":
+            case "/bye":
             case "/exit":
             case "/close":
-                System.out.println("\n👋 Closing connection...");
+                System.out.println("\n Closing connection...");
                 isRunning.set(false);
                 break;
 
             case "/help":
-                System.out.println("\n📖 Available Commands:");
+                System.out.println("\n Available Commands:");
                 System.out.println("  /help      - Show this help message");
                 System.out.println("  /quit      - Close connection and exit");
+                System.out.println("  /bye       - Same as /quit");
                 System.out.println("  /exit      - Same as /quit");
                 System.out.println("  /close     - Same as /quit");
                 System.out.println("  /status    - Show connection status");
@@ -325,11 +359,11 @@ public class Main {
                 break;
 
             case "/status":
-                System.out.println("\n✓ Connection Status:");
+                System.out.println("\n Connection Status:");
                 System.out.println("  Local AsyncPeer: " + peerName);
                 System.out.println("  Remote AsyncPeer: " + remotePeerId);
                 System.out.println("  Status: CONNECTED & PAIRED");
-                System.out.println("  Encryption: AES-256 (Quantum-Safe)");
+                System.out.println("  Encryption: legacy session encryption (v2 migration in progress)");
                 System.out.println();
                 System.out.print(peerName + "> ");
                 break;
@@ -341,7 +375,7 @@ public class Main {
                 break;
 
             default:
-                System.out.println("❌ Unknown command: " + command);
+                System.out.println(" Unknown command: " + command);
                 System.out.println("   Type '/help' for available commands");
                 System.out.print(peerName + "> ");
         }
@@ -352,17 +386,13 @@ public class Main {
      * <p>
      * Displays command-line syntax and examples for:
      * <ul>
-     * <li>Server mode</li>
-     * <li>Client mode</li>
      * <li>Interactive peer mode (both listening and connecting)</li>
      * </ul>
      * </p>
      */
     private static void printUsage() {
         System.out.println("Usage:");
-        System.out.println(" java Main server - Start as server");
-        System.out.println(" java Main client - Start as client");
-        System.out.println(" java Main peer [port] [listen] - Start as peer");
+        System.out.println(" java Main peer [name] [port] [listen|connect] [host] [remotePort]");
         System.out.println("");
         System.out.println("Interactive P2P Chat (NEW):");
         System.out.println(" java Main interactive [name] [port] listen");
