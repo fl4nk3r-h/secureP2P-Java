@@ -2,7 +2,7 @@
 
 SecureP2P is a Java 21 project for asynchronous peer connections and a migrating cryptographic session design.
 
-This repository is **not production-ready secure messaging software**. The live `AsyncPeer` protocol still uses unauthenticated 1024-bit finite-field DH and the legacy provider-default AES path. The newer ML-KEM and AES-GCM classes are tested migration foundations, but they are not yet part of the live peer handshake. See [Security Notes](docs/security.md) before using it beyond local experiments.
+This repository is **not production-ready secure messaging software**. The live `AsyncPeer` protocol now uses an ML-KEM-768 bootstrap and AES-256-GCM, but it still lacks authenticated peer identities, a Double Ratchet, replay protection, and hardened protocol framing. See [Security Notes](docs/security.md) before using it beyond local experiments.
 
 ## Quick Start
 
@@ -28,12 +28,11 @@ Use `/help`, `/status`, `/clear`, or `/quit` in the chat. The application expose
 ## What Is Implemented
 
 - `Main`: peer-only command-line entry point with `peer` and `interactive` modes.
-- `Client` and `Server`: retained source classes for the legacy echo example, not exposed as CLI modes.
-- `AsyncPeer`: asynchronous accept/connect operations, peer-ID exchange, DH key exchange, encrypted sends, a receive queue, and callbacks.
-- `CryptoUtils`: AES helper methods and SHA-256-to-AES key derivation.
-- `KeyExchange`: 1024-bit finite-field DH key generation and Base64 public-key serialization.
+- `AsyncPeer`: asynchronous accept/connect operations, peer-ID exchange, ML-KEM-768 session bootstrap, AES-GCM sends, a receive queue, and callbacks.
+- `PeerConnection`, `SessionManager`, and `MessageListener`: separated transport, session, and inbound-delivery responsibilities.
 - `AeadCrypto`: explicit AES-256-GCM encryption with random nonces and authenticated associated data.
-- `MlKemKeyExchange`: Bouncy Castle-backed ML-KEM-768 encapsulation and decapsulation foundation.
+- `MlKemKeyExchange`: Bouncy Castle-backed ML-KEM-768 encapsulation and decapsulation.
+- `com.zerotrust.legacy`: archived DH/AES and plaintext echo classes retained for historical reference only.
 
 ## Documentation
 
@@ -51,6 +50,7 @@ Use `/help`, `/status`, `/clear`, or `/quit` in the chat. The application expose
 pom.xml                         Maven build and dependency configuration
 src/main/java/com/zerotrust      Application, networking, and crypto code
 src/test/java/com/zerotrust      JUnit tests for crypto and AsyncPeer behavior
+src/main/java/com/zerotrust/legacy Archived pre-v2 classes, not wired into active code
 docs/                            Maintained project documentation
 ```
 
@@ -72,13 +72,13 @@ mvn test -Dtest=KeyExchangeTest
 mvn test -Dtest=AsyncPeerTest
 ```
 
-The tests cover crypto round trips, DH agreement, peer connection setup, peer-ID exchange, key exchange, callbacks, message delivery, and cleanup. The test count is determined by the current source, so documentation intentionally does not hard-code an expected number.
+The tests cover ML-KEM agreement, AES-GCM authentication, peer connection setup, peer-ID exchange, PQC session bootstrap, callbacks, message delivery, cleanup, and archived legacy primitives. The test count is determined by the current source, so documentation intentionally does not hard-code an expected number.
 
 ## Scope and Status
 
 The project currently has no configuration file, persistence layer, authentication authority, message model, file transfer protocol, or TLS integration. SLF4J and Logback are declared in Maven but the application currently writes directly to standard output and standard error.
 
-The PQC migration is in progress. The tested ML-KEM and AES-GCM primitives are not yet wired into `AsyncPeer`; the current peer protocol remains the legacy unauthenticated DH/AES path until the versioned session protocol and module split are complete.
+The PQC migration is in progress. ML-KEM-768 and AES-GCM are now wired into `SessionManager`, while identity authentication, protocol version negotiation, replay handling, and the Double Ratchet remain pending. Legacy DH/AES and echo code is archived and not wired into the active peer application.
 
 ## Why It Is Not Production Ready
 

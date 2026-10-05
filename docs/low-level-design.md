@@ -8,8 +8,6 @@ The package and class diagrams for this API are maintained in [Module-Level Desi
 com.zerotrust
   Main.java
   crypto/
-    CryptoUtils.java
-    KeyExchange.java
     AeadCrypto.java
     MlKemKeyExchange.java
   network/
@@ -17,6 +15,9 @@ com.zerotrust
     PeerConnection.java
     SessionManager.java
     MessageListener.java
+  legacy/
+    CryptoUtils.java
+    KeyExchange.java
     Client.java
     Server.java
 ```
@@ -32,11 +33,11 @@ com.zerotrust
 
 Invalid or missing modes print usage information. Exceptions are reported to standard error.
 
-## Legacy `Client` and `Server` classes
+## Archived legacy classes
 
-These classes remain as source-level synchronous echo examples but are no longer selectable through `Main`.
+The archived `com.zerotrust.legacy` package contains the pre-v2 synchronous echo and DH/AES examples. They compile for historical comparison and tests, but active code does not import them.
 
-### `Client`
+### `com.zerotrust.legacy.Client`
 
 ```java
 Client(String address, int port) throws IOException
@@ -47,7 +48,7 @@ void close() throws IOException
 
 The constructor opens the socket and creates auto-flushing text streams. `sendMessage` writes one line. `receiveMessage` blocks until a line or EOF. This class has no encryption or retry behavior.
 
-### `Server`
+### `com.zerotrust.legacy.Server`
 
 ```java
 Server(int port) throws IOException
@@ -68,7 +69,7 @@ void connectToPeerAsync(String address, int port, Consumer<AsyncPeer> callback)
 boolean waitForConnectionReady(long timeoutMillis) throws InterruptedException
 ```
 
-Construction creates a four-thread executor and delegates transport setup to `PeerConnection`, session state to `SessionManager`, and inbound delivery to `MessageListener`. The `PeerConnection` binds `port`; accept/connect methods initialize its socket and streams asynchronously. Callers must wait for readiness before using the streams.
+Construction creates a four-thread executor and delegates transport setup to `PeerConnection`, PQC session state to `SessionManager`, and inbound delivery to `MessageListener`. The `PeerConnection` binds `port`; accept/connect methods initialize its socket and streams asynchronously. Callers must wait for readiness before using the streams.
 
 ### Handshake
 
@@ -79,7 +80,7 @@ void performKeyExchangeAsync(Runnable onComplete)
 
 `exchangePeerId()` writes `PEER_ID:<local-id>` and reads the matching line from the other peer. Both peers should call it concurrently because each side writes and then reads.
 
-`performKeyExchangeAsync` writes a Base64 public key, reads the peer key, computes DH, hashes the Base64 shared-secret string with SHA-256, stores the resulting AES key, and starts the message listener. The method returns before the operation completes; use `onComplete` or another synchronization mechanism before sending encrypted application data.
+`performKeyExchangeAsync` exchanges `PQC_V2:ML-KEM-768` public-key frames, encapsulates to the remote public key, exchanges encapsulation ciphertexts, derives a key from both ordered KEM secrets, and starts the message listener. The method returns before the operation completes; use `onComplete` or another synchronization mechanism before sending encrypted application data.
 
 ### Messaging and callbacks
 
@@ -93,7 +94,7 @@ void onError(Consumer<Exception> callback)
 void onSendComplete(Consumer<Boolean> callback)
 ```
 
-After the key is set, sends are Base64-encoded ciphertext lines. Before the key is set, `SessionManager` rejects the send instead of transmitting plaintext. `MessageListener` puts the raw line into `messageQueue`; a worker decrypts the line and invokes `onMessageReceived` with the plaintext. `pollMessage()` therefore returns the queued wire value, not the callback payload.
+After the PQC session key is set, sends are Base64-encoded AES-GCM values containing a nonce, ciphertext, and tag. Before the key is set, `SessionManager` rejects the send instead of transmitting plaintext. `MessageListener` puts the raw line into `messageQueue`; a worker decrypts the line and invokes `onMessageReceived` with the plaintext. `pollMessage()` therefore returns the queued wire value, not the callback payload.
 
 The registered `onSendComplete` callback is used when a per-call callback is not supplied. Callbacks receive `true` only after the delegated transport write succeeds and `false` when session or transport handling fails.
 
@@ -118,27 +119,24 @@ constructed -> accepting/connecting -> connection ready
 
 `close()` closes the transport first to unblock the listener, stops message delivery, clears session state, and shuts down the executor. Use it in a `finally` block.
 
-## `CryptoUtils`
+## `AeadCrypto`
 
 ```java
-String encrypt(String data, SecretKey key) throws Exception
-String decrypt(String encryptedData, SecretKey key) throws Exception
-SecretKey generateKey() throws Exception
-SecretKey getKeyFromString(String keyString) throws Exception
+byte[] encrypt(byte[] plaintext, byte[] key, byte[] associatedData) throws GeneralSecurityException
+byte[] decrypt(byte[] encrypted, byte[] key, byte[] associatedData) throws GeneralSecurityException
 ```
 
-`generateKey()` creates a random 256-bit AES key. `getKeyFromString()` uses SHA-256 over UTF-8 bytes and wraps the 32-byte digest as an AES key. Encrypt/decrypt convert text using the platform default charset.
+`AeadCrypto` requires a 32-byte AES key, generates a fresh 12-byte nonce per encryption, and authenticates optional associated data with a 128-bit GCM tag.
 
-## `KeyExchange`
+## `MlKemKeyExchange`
 
 ```java
-KeyExchange() throws Exception
-String getPublicKeyString()
-byte[] generateSharedSecret(String otherPublicKeyString) throws Exception
-String getSharedSecretString(String otherPublicKeyString) throws Exception
+KeyPair generateKeyPair() throws GeneralSecurityException
+Encapsulation encapsulate(byte[] encodedPublicKey) throws Exception
+byte[] decapsulate(byte[] encodedPrivateKey, byte[] encapsulation) throws Exception
 ```
 
-Public keys are X.509-encoded DH keys represented as Base64. The implementation initializes a 1024-bit DH key pair and uses Java `KeyAgreement` to compute the shared secret.
+The active implementation uses ML-KEM-768. Public and private keys use provider encodings; the session protocol transports public keys and encapsulation ciphertexts as Base64.
 
 ## Wire format
 
@@ -146,8 +144,9 @@ The current protocol has three line shapes:
 
 ```text
 PEER_ID:<peer identifier>
-<Base64-encoded X.509 DH public key>
-<Base64-encoded AES ciphertext or plaintext before key setup>
+PQC_V2:ML-KEM-768:<Base64-encoded public key>
+PQC_CT:<Base64-encoded encapsulation ciphertext>
+<Base64-encoded AES-GCM nonce+ciphertext+tag>
 ```
 
-There is no framing metadata, message type, sequence number, nonce, authentication tag, protocol version, or length field.
+The current line protocol has no structured length field, authenticated identity, sequence number, replay cache, or Double Ratchet header. The `PQC_V2` marker identifies the active bootstrap format but is not yet an authenticated negotiation.

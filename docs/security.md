@@ -4,16 +4,17 @@
 
 This is an educational protocol demonstration, not a secure messaging product. Encryption is present, but confidentiality alone does not provide an authenticated or tamper-resistant channel.
 
-The migration has started with tested `AeadCrypto` and `MlKemKeyExchange` primitives. These are not yet connected to `AsyncPeer`; the active peer protocol therefore remains the legacy unauthenticated DH/AES path described below. Do not interpret the new classes as proof that peer communication is already post-quantum or authenticated.
+The active peer protocol now uses an ML-KEM-768 bootstrap and AES-256-GCM through `SessionManager`. This provides a post-quantum KEM primitive and authenticated encryption for message payloads, but it does not by itself authenticate peer identity or provide a Double Ratchet. The older DH/AES implementation is archived under `com.zerotrust.legacy` and is not wired into active code.
 
 The rationale and status of the migration choices are recorded in [Architecture and Security Decisions](decisions.md), including provider selection, ML-KEM parameter selection, AES-GCM usage, protocol compatibility, identity authentication, and the Double Ratchet security gate.
 
 ## Implemented protections
 
-- Java cryptographic providers supply DH, AES, SHA-256, and `SecureRandom` primitives.
-- Each `KeyExchange` instance creates a fresh DH key pair.
-- Peer messages are normally encrypted after the asynchronous handshake completes.
-- Public keys and ciphertext are Base64-encoded for transport over line-oriented streams.
+- Bouncy Castle supplies ML-KEM-768 key generation, encapsulation, and decapsulation.
+- Peer messages use AES-256-GCM with random 12-byte nonces and 128-bit tags.
+- Protocol metadata is supplied as authenticated associated data for message encryption.
+- Session sends are rejected until the PQC bootstrap completes.
+- Public keys, KEM ciphertexts, and encrypted payloads are Base64-encoded for line transport.
 
 ## Important limitations
 
@@ -23,15 +24,15 @@ The DH exchange has no certificate, fingerprint, pre-shared key, or authenticate
 
 ### No ciphertext authentication in the live protocol
 
-The live `AsyncPeer` protocol uses the legacy `AES` transformation, which does not provide an authentication tag. An attacker can modify, replay, reorder, or inject lines; decryption errors may be reported, but there is no protocol-level authenticity or replay protection. `AeadCrypto` contains the planned AES-GCM primitive, but it is not wired into live sessions yet.
+AES-GCM authenticates an individual payload, but the current protocol has no authenticated peer identity, sequence number, replay cache, or Double Ratchet. An attacker can still replay valid ciphertext, reorder messages, or attempt session-level injection. The archived `AES` transformation is not used by active peer sessions.
 
 ### Weak and implicit cryptographic choices
 
-The implementation uses 1024-bit finite-field DH and leaves the AES mode and padding implicit in `Cipher.getInstance("AES")`. The key derivation is a direct SHA-256 hash of a textual shared-secret representation, without domain separation or a standard KDF such as HKDF.
+The archived implementation used 1024-bit finite-field DH and an implicit `Cipher.getInstance("AES")` transformation. The active ML-KEM bootstrap derives a session key by hashing ordered KEM secrets with a protocol context, but a reviewed KDF and authenticated transcript binding remain part of the v2 hardening work.
 
 ### Ordering and plaintext hazards
 
-`SessionManager` now rejects `sendMessageAsync` before `encryptionKey` is initialized, preventing the previous plaintext-before-key behavior. `performKeyExchangeAsync` is still asynchronous and returns immediately, so application code must wait for completion. The CLI currently prints completion immediately after scheduling the exchange.
+`SessionManager` rejects `sendMessageAsync` before the PQC session key is initialized. `performKeyExchangeAsync` is still asynchronous and returns immediately, so application code must wait for completion. The CLI currently prints completion immediately after scheduling the exchange.
 
 ### Metadata and operational exposure
 
@@ -51,12 +52,11 @@ The current implementation may be acceptable for local demonstrations where both
 
 Before treating this as a real secure channel:
 
-1. Prefer TLS 1.3 with certificate or public-key pinning, or define an authenticated protocol using a vetted library.
-2. If retaining application-level encryption, use an AEAD mode such as AES-GCM or ChaCha20-Poly1305 with a unique nonce per message and authenticated framing.
-3. Replace 1024-bit finite-field DH with a modern authenticated key agreement and an explicit key schedule.
-4. Add peer authentication, transcript binding, protocol versioning, sequence numbers, replay handling, and message-size limits.
-5. Enforce a state machine that rejects sends until the authenticated session is ready.
-6. Use explicit UTF-8 encoding everywhere and avoid logging message content or sensitive handshake material.
-7. Add negative tests for tampering, replay, malformed frames, handshake races, connection timeouts, and authentication failures.
+1. Add pinned identity keys and authenticated transcript signatures; ML-KEM alone does not prevent MITM attacks.
+2. Replace the current hash-based session derivation with a reviewed KDF and bind all handshake capabilities and identities.
+3. Implement a reviewed Double Ratchet with sequence numbers, replay handling, skipped-key limits, and out-of-order delivery.
+4. Add structured versioned framing, downgrade rejection, message-size limits, timeouts, and resource quotas.
+5. Use explicit UTF-8 encoding everywhere and avoid logging message content or sensitive handshake material.
+6. Add negative tests for identity failure, tampering, replay, malformed frames, handshake races, connection timeouts, and ratchet failures.
 
 Changes to cryptographic primitives should be reviewed as security-sensitive changes and accompanied by tests that prove both sides derive the same key and reject invalid input.
