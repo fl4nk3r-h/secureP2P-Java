@@ -49,7 +49,7 @@ The package currently contains the active peer path. The former echo path is arc
 
 | Network path | Classes | Characteristics |
 | --- | --- | --- |
-| Peer path | `AsyncPeer`, `PeerConnection`, `SessionManager`, `MessageListener` | Asynchronous connection setup, DH handshake, encrypted message sends, queue/callback delivery. |
+| Peer path | `AsyncPeer`, `PeerConnection`, `SessionManager`, `MessageListener` | Asynchronous connection setup, ML-KEM bootstrap, AES-GCM message sends, queue/callback delivery. |
 
 ### `com.zerotrust.crypto`
 
@@ -206,9 +206,9 @@ stateDiagram-v2
     Connecting --> Error: connection fails
     Listening --> Error: accept fails
     ConnectionReady --> PeerIdsExchanged: exchangePeerId() on both sides
-    PeerIdsExchanged --> KeyExchangeRunning: performKeyExchangeAsync()
-    KeyExchangeRunning --> Encrypted: both callbacks complete
-    KeyExchangeRunning --> Error: invalid key or I/O failure
+    PeerIdsExchanged --> PqcBootstrapRunning: performKeyExchangeAsync()
+    PqcBootstrapRunning --> Encrypted: both callbacks complete
+    PqcBootstrapRunning --> Error: invalid key or I/O failure
     Encrypted --> Messaging: listener starts
     Messaging --> Messaging: send or receive line
     Constructed --> Closed: close()
@@ -241,7 +241,7 @@ flowchart LR
     Read[listenerThread readLine]
     Queue[messageQueue\nraw wire line]
     Process[executor task]
-    Decrypt[CryptoUtils.decrypt]
+    Decrypt[AeadCrypto.decrypt]
     Callback[onMessageReceived\nplaintext]
     Poll[pollMessage\nraw wire line]
 
