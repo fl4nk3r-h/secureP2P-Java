@@ -17,10 +17,10 @@ Start the interactive demo in two terminals:
 
 ```bash
 # Terminal 1: listener
-java -cp target/securep2p-2.0.0-SNAPSHOT.jar com.zerotrust.Main interactive Alice 12346 listen
+java -jar target/securep2p-2.0.0-SNAPSHOT.jar interactive Alice 12346 listen
 
 # Terminal 2: connector
-java -cp target/securep2p-2.0.0-SNAPSHOT.jar com.zerotrust.Main interactive Bob 12347 connect localhost 12346
+java -jar target/securep2p-2.0.0-SNAPSHOT.jar interactive Bob 12347 connect localhost 12346
 ```
 
 Use `/help`, `/status`, `/clear`, or `/quit` in the chat. The application exposes peer mode only; the legacy `Client` and `Server` classes remain internal library examples and are no longer selectable from `Main`.

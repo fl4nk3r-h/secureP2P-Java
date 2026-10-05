@@ -12,10 +12,10 @@ Run peer chat in two terminals:
 
 ```bash
 # Listener: binds local port 12346
-java -cp target/securep2p-2.0.0-SNAPSHOT.jar com.zerotrust.Main interactive Alice 12346 listen
+java -jar target/securep2p-2.0.0-SNAPSHOT.jar interactive Alice 12346 listen
 
 # Connector: binds local port 12347 and connects to listener
-java -cp target/securep2p-2.0.0-SNAPSHOT.jar com.zerotrust.Main interactive Bob 12347 connect localhost 12346
+java -jar target/securep2p-2.0.0-SNAPSHOT.jar interactive Bob 12347 connect localhost 12346
 ```
 
 The listener's port is the remote port used by the connector. Each peer also binds its own local port, so both ports must be available.
