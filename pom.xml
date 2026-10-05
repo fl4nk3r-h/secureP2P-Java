@@ -16,6 +16,7 @@
         <bouncycastle.version>1.80</bouncycastle.version>
         <slf4j.version>2.0.12</slf4j.version>
         <logback.version>1.4.14</logback.version>
+        <maven.shade.plugin.version>3.6.2</maven.shade.plugin.version>
     </properties>
 
     <dependencies>
@@ -47,10 +48,35 @@
             <artifactId>logback-classic</artifactId>
             <version>${logback.version}</version>
         </dependency>
+
+        <!-- Source: https://mvnrepository.com/artifact/org.apache.maven.plugins/maven-shade-plugin -->
+        <!-- Shade Plugin for Fatty Jar-->
+        <dependency>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-shade-plugin</artifactId>
+            <version>${maven.shade.plugin.version}</version>
+            <scope>compile</scope>
+        </dependency>
     </dependencies>
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.6.2</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <!-- Optional configurations go here -->
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
