@@ -1,5 +1,7 @@
 # Low-Level Design and API
 
+The package and class diagrams for this API are maintained in [Module-Level Design](module-level-design.md).
+
 ## Packages
 
 ```text
