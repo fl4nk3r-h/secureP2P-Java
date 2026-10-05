@@ -31,7 +31,7 @@ mvn test -Dtest=AsyncPeerTest
 mvn test -Dtest=CryptoUtilsTest#testEncryption
 ```
 
-The packaged artifact is `target/securep2p-1.0-SNAPSHOT.jar`.
+The packaged artifact is `target/securep2p-2.0.0-SNAPSHOT.jar`.
 
 ## Test scope
 
