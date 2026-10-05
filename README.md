@@ -32,6 +32,8 @@ Use `/help`, `/status`, `/clear`, or `/quit` in the chat. The simpler `server` a
 - `AsyncPeer`: asynchronous accept/connect operations, peer-ID exchange, DH key exchange, encrypted sends, a receive queue, and callbacks.
 - `CryptoUtils`: AES helper methods and SHA-256-to-AES key derivation.
 - `KeyExchange`: 1024-bit finite-field DH key generation and Base64 public-key serialization.
+- `AeadCrypto`: explicit AES-256-GCM encryption with random nonces and authenticated associated data.
+- `MlKemKeyExchange`: Bouncy Castle-backed ML-KEM-768 encapsulation and decapsulation foundation.
 
 ## Documentation
 
@@ -74,6 +76,8 @@ The tests cover crypto round trips, DH agreement, peer connection setup, peer-ID
 ## Scope and Status
 
 The project currently has no configuration file, persistence layer, authentication authority, message model, file transfer protocol, or TLS integration. SLF4J and Logback are declared in Maven but the application currently writes directly to standard output and standard error.
+
+The PQC migration is in progress. The tested ML-KEM and AES-GCM primitives are not yet wired into `AsyncPeer`; the current peer protocol remains the legacy unauthenticated DH/AES path until the versioned session protocol and module split are complete.
 
 Treat changes to the wire protocol and cryptographic transformations as compatibility and security changes. Update the relevant documentation and tests in the same change.
 
