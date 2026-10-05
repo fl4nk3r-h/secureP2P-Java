@@ -1,8 +1,8 @@
 # SecureP2P Java
 
-SecureP2P is a Java 21 project for asynchronous peer connections and a migrating cryptographic session design.
+SecureP2P is a Java 21 peer-to-peer messaging project with asynchronous TCP connections, a post-quantum session bootstrap, and authenticated payload encryption.
 
-This repository is **not production-ready secure messaging software**. The live `AsyncPeer` protocol now uses an ML-KEM-768 bootstrap and AES-256-GCM, but it still lacks authenticated peer identities, a Double Ratchet, replay protection, and hardened protocol framing. See [Security Notes](docs/security.md) before using it beyond local experiments.
+The active peer path uses ML-KEM-768 to establish session material and AES-256-GCM to protect messages. The codebase is organized around focused networking, session, listener, and cryptography modules so the protocol can continue evolving cleanly.
 
 ![Image](image.png)
 
@@ -15,7 +15,7 @@ mvn clean test
 mvn package
 ```
 
-Start the interactive demo in two terminals:
+Start an interactive encrypted peer session in two terminals:
 
 ```bash
 # Terminal 1: listener
@@ -25,7 +25,7 @@ java -jar target/securep2p-2.0.0-SNAPSHOT.jar interactive Alice 12346 listen
 java -jar target/securep2p-2.0.0-SNAPSHOT.jar interactive Bob 12347 connect localhost 12346
 ```
 
-Use `/help`, `/status`, `/clear`, `/quit`, or `/bye` in the chat. The application reports connection success only after asynchronous stream initialization and starts chat only after the encrypted session handshake completes. The application exposes peer mode only; the legacy `Client` and `Server` classes remain internal library examples and are no longer selectable from `Main`.
+Use `/help`, `/status`, `/clear`, `/quit`, or `/bye` in the chat. The application reports connection success after asynchronous stream initialization and starts chat after the encrypted session handshake completes. The application exposes peer mode only; archived `Client` and `Server` classes remain in the legacy package for reference.
 
 ## What Is Implemented
 
@@ -34,7 +34,7 @@ Use `/help`, `/status`, `/clear`, `/quit`, or `/bye` in the chat. The applicatio
 - `PeerConnection`, `SessionManager`, and `MessageListener`: separated transport, session, and inbound-delivery responsibilities.
 - `AeadCrypto`: explicit AES-256-GCM encryption with random nonces and authenticated associated data.
 - `MlKemKeyExchange`: Bouncy Castle-backed ML-KEM-768 encapsulation and decapsulation.
-- `com.zerotrust.legacy`: archived DH/AES and plaintext echo classes retained for historical reference only.
+- `com.zerotrust.legacy`: archived DH/AES and plaintext echo classes retained for historical comparison.
 
 ## Documentation
 
@@ -42,7 +42,7 @@ Use `/help`, `/status`, `/clear`, `/quit`, or `/bye` in the chat. The applicatio
 - [Module-level design](docs/module-level-design.md): package boundaries, class diagrams, dependencies, state model, and message paths.
 - [Architecture and security decisions](docs/decisions.md): decisions taken, rationale, alternatives, consequences, and pending gates.
 - [Low-level design and API](docs/low-level-design.md): classes, state transitions, wire format, threading, and usage contracts.
-- [Security notes](docs/security.md): implemented protections, known weaknesses, threat boundaries, and hardening priorities.
+- [Security notes](docs/security.md): implemented protections, protocol boundaries, and hardening roadmap.
 - [Development and testing](docs/development.md): project layout, Maven commands, test scope, and contribution guidance.
 - [Operations and troubleshooting](docs/operations.md): runtime behavior, ports, failure modes, and cleanup.
 
@@ -52,7 +52,7 @@ Use `/help`, `/status`, `/clear`, `/quit`, or `/bye` in the chat. The applicatio
 pom.xml                         Maven build and dependency configuration
 src/main/java/com/zerotrust      Application, networking, and crypto code
 src/test/java/com/zerotrust      JUnit tests for crypto and AsyncPeer behavior
-src/main/java/com/zerotrust/legacy Archived pre-v2 classes, not wired into active code
+src/main/java/com/zerotrust/legacy Archived pre-v2 classes for comparison
 docs/                            Maintained project documentation
 ```
 
@@ -75,26 +75,23 @@ mvn test -Dtest=AsyncPeerTest
 
 The tests cover ML-KEM agreement, AES-GCM authentication, peer connection setup, peer-ID exchange, PQC session bootstrap, callbacks, message delivery, cleanup, and archived legacy primitives. The test count is determined by the current source, so documentation intentionally does not hard-code an expected number.
 
-## Scope and Status
+## Project Status
 
-The project currently has no configuration file, persistence layer, authentication authority, message model, file transfer protocol, or TLS integration. SLF4J and Logback are declared in Maven but the application currently writes directly to standard output and standard error.
+SecureP2P currently focuses on direct peer chat over TCP. Runtime configuration is supplied through command-line arguments, and the active application path is the asynchronous peer mode in `Main`.
 
-The PQC migration is in progress. ML-KEM-768 and AES-GCM are now wired into `SessionManager`, while identity authentication, protocol version negotiation, replay handling, and the Double Ratchet remain pending. Legacy DH/AES and echo code is archived and not wired into the active peer application.
+The cryptographic migration has moved the active session path to ML-KEM-768 and AES-256-GCM through `SessionManager`. Next protocol milestones include authenticated peer identity, version negotiation, replay handling, and ratchet-managed key evolution.
 
-## Why It Is Not Production Ready
+SLF4J and Logback are declared in Maven for logging integration work; the command-line application currently writes directly to standard output and standard error.
 
-The project is a useful protocol and concurrency demonstration, but it does not yet meet the security or operational bar for a production messaging system:
+## Protocol Roadmap
 
-- **Peer identity is not authenticated.** The current DH exchange has no certificate, pinned identity key, signature, or verified fingerprint, so an active attacker can perform a man-in-the-middle attack.
-- **The live cipher is not an authenticated encryption protocol.** `AsyncPeer` still uses the legacy `CryptoUtils` transformation, whose mode and padding are implicit and which provides no authentication tag, replay protection, or message ordering guarantees.
-- **PQC peer authentication is not complete.** The live handshake uses ML-KEM-768, but exchanged keys are not bound to authenticated peer identities, so ML-KEM alone does not prevent man-in-the-middle attacks.
-- **AES-GCM is not active in peer sessions.** `AeadCrypto` provides the planned AES-256-GCM primitive, but the live protocol does not yet supply ratchet-managed keys, authenticated headers, or enforced nonce/key lifecycle rules.
-- **The Double Ratchet is not implemented.** There is no production-grade forward-secrecy, post-compromise recovery, skipped-message-key handling, or out-of-order message state machine.
-- **The wire protocol is still a legacy line protocol.** It has no authenticated version negotiation, downgrade rejection, strict frame-size limits, structured message types, or robust malformed-frame handling.
-- **Operational controls are incomplete.** There is no identity provisioning and rotation workflow, revocation/recovery process, rate limiting, resource quotas, health monitoring, security audit logging, or deployment hardening.
-- **Validation is not a security certification.** The test suite covers cooperative behavior and primitive properties, but authentication failures, replay, downgrade, malformed frames, ratchet state, and hostile-network behavior remain incomplete.
+Planned protocol work is tracked in [Architecture and Security Decisions](docs/decisions.md):
 
-Production readiness requires the versioned authenticated session, ML-KEM integration, reviewed ratchet construction, identity lifecycle, negative security tests, dependency review, bounded transport behavior, and operational controls described in [Architecture and Security Decisions](docs/decisions.md).
+- Bind ML-KEM handshakes to authenticated peer identities.
+- Add versioned framing with authenticated capability negotiation.
+- Add replay handling, message counters, and bounded malformed-frame handling.
+- Introduce a reviewed ratchet construction for key evolution.
+- Expand negative tests for identity, tampering, replay, downgrade, malformed frames, and timeout behavior.
 
 Treat changes to the wire protocol and cryptographic transformations as compatibility and security changes. Update the relevant documentation and tests in the same change.
 

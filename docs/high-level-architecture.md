@@ -25,7 +25,7 @@ flowchart TB
 
 ### Application layer
 
-`com.zerotrust.Main` parses positional command-line arguments and coordinates the selected demonstration. Interactive mode creates an `AsyncPeer`, waits for a connection, exchanges peer IDs, starts key exchange, and enters a terminal chat loop.
+`com.zerotrust.Main` parses positional command-line arguments and coordinates the selected peer workflow. Interactive mode creates an `AsyncPeer`, waits for a connection, exchanges peer IDs, starts key exchange, and enters a terminal chat loop.
 
 ### Networking layer
 
@@ -75,7 +75,7 @@ sequenceDiagram
 ## Architectural constraints
 
 - One `AsyncPeer` façade owns one `PeerConnection`, one `SessionManager`, and one `MessageListener` for a single active peer session.
-- The protocol is line-delimited and cannot safely carry arbitrary unescaped newlines.
+- The protocol is line-delimited; structured multiline payloads belong in a future framed message format.
 - The current CLI defaults to local port `9000`, listen mode, and a generated peer ID.
 - The line protocol has ML-KEM frame prefixes but does not yet provide authenticated capability negotiation or downgrade rejection.
 

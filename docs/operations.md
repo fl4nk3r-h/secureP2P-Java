@@ -53,4 +53,4 @@ The project has no external configuration file, service manager, health endpoint
 
 ## Deployment boundary
 
-The application is intended for local or controlled-network use. Do not expose the current peer protocol to an untrusted network. Network encryption is not a substitute for authentication, authorization, patch management, firewalling, or process isolation.
+The application is oriented toward local or controlled-network peer sessions while the authenticated v2 protocol work continues. Use normal network controls around any peer process, including authentication, authorization, patch management, firewalling, and process isolation.

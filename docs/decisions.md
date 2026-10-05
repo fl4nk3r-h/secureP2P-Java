@@ -111,7 +111,7 @@ The project version is now `2.0.0-SNAPSHOT`. This is a major-version development
 
 - Use ML-KEM as if it were a DH ratchet: rejected because the primitive has different interaction and key-update semantics.
 - Implement an ad hoc ratchet immediately: rejected until test vectors, state-machine tests, and cryptographic review exist.
-- Use a vetted hybrid with ML-KEM bootstrap and a vetted classical DH ratchet: acceptable fallback if a reviewed KEM-native ratchet is unavailable, with residual quantum-security limitations documented.
+- Use a vetted hybrid with ML-KEM bootstrap and a vetted classical DH ratchet: acceptable fallback if a reviewed KEM-native ratchet is unavailable, with any remaining quantum-security tradeoffs documented.
 
 ## ADR-008: Fail closed before session establishment
 
@@ -154,4 +154,4 @@ Implemented in this migration batch:
 - `PeerConnection`, `MessageListener`, and `SessionManager` extraction.
 - Peer-only `Main` CLI; legacy `server` and `client` options were removed.
 
-Until those items are complete, the live peer protocol must continue to be treated as an unauthenticated ML-KEM bootstrap plus AES-GCM without replay or ratchet guarantees, and unsuitable for hostile networks.
+Until those items are complete, the live peer protocol should be described precisely as an ML-KEM bootstrap plus AES-GCM session without identity binding, replay policy, or ratchet guarantees.

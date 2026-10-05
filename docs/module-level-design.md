@@ -61,7 +61,7 @@ Responsibilities:
 - Encapsulate and decapsulate session secrets.
 - Provide explicit AES-256-GCM payload protection with nonces and associated data.
 
-This module has no socket or CLI dependencies. `AeadCrypto` and `MlKemKeyExchange` are wired into the live `SessionManager`; identity authentication and ratchet state remain pending. Current algorithms and limitations are documented in [Security Notes](security.md).
+This module has no socket or CLI dependencies. `AeadCrypto` and `MlKemKeyExchange` are wired into the live `SessionManager`; identity authentication and ratchet state remain protocol roadmap items. Current algorithms and protocol boundaries are documented in [Security Notes](security.md).
 
 ## Implemented class diagram
 
